@@ -1,0 +1,13 @@
+Mandatory:
+- Combinator: task filters (taskmanagement.domain.filter.TaskFilter, Filters)
+- Visitor: reporting over tasks (taskmanagement.domain.visitor.TaskVisitor + reports.adapters)
+
+Additional (4):
+- Observer: ViewModel -> View updates (ui observes application layer)
+- State: Task lifecycle (taskmanagement.domain.TaskState with transitions)
+- Command: undo/redo for add/update/delete (application.commands.*)
+- Strategy: sorting/prioritization (application.sorting.*)
+
+Also planned:
+- Singleton: EmbeddedDerbyTasksDAO as a single instance (taskmanagement.persistence.derby.EmbeddedDerbyTasksDAO#getInstance)
+- Adapter: Report exporters adapt Visitor reports to outputs (taskmanagement.domain.visitor.adapters.* -> CSV/PlainText)
