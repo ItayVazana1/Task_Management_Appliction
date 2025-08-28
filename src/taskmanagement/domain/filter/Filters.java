@@ -1,158 +1,66 @@
 package taskmanagement.domain.filter;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
-import java.util.function.Predicate;
-
 import taskmanagement.domain.ITask;
 import taskmanagement.domain.TaskState;
 
 /**
- * A factory/utility for building composable TaskFilter instances.
- * <p>Implements the Combinator pattern (AND/OR/NOT) and common predicates.</p>
+ * Factory methods for common task filters (Combinator).
  */
 public final class Filters {
+    private Filters() { }
 
-    private Filters() { /* utility class */ }
-
-    /**
-     * A filter that always matches.
-     */
+    /** Matches any task. */
     public static ITaskFilter any() {
         return t -> true;
     }
 
-    /**
-     * A filter that never matches.
-     */
+    /** Matches no task. */
     public static ITaskFilter none() {
         return t -> false;
     }
 
-    /**
-     * Builds a filter from a java.util.function.Predicate over ITask.
-     * @param predicate predicate (non-null)
-     * @return TaskFilter wrapping the predicate
-     */
-    public static ITaskFilter of(Predicate<ITask> predicate) {
-        Objects.requireNonNull(predicate, "predicate");
-        return predicate::test;
-    }
-
-    /**
-     * Matches tasks by their state.
-     * @param state non-null state to match
-     * @return a filter for the given state
-     */
+    /** Filter by exact state. */
     public static ITaskFilter byState(TaskState state) {
-        Objects.requireNonNull(state, "state");
-        return t -> t != null && state.equals(t.getState());
+        return t -> t != null && t.getState() == state;
     }
 
-    /**
-     * Matches tasks whose title contains the given token.
-     * @param token non-empty token
-     * @param ignoreCase true to ignore case
-     * @return a filter for title containment
-     */
+    /** Filter by title containing token (case-insensitive by default). */
+    public static ITaskFilter titleContains(String token) {
+        return titleContains(token, true);
+    }
+
+    /** Filter by title containing token with control over case-sensitivity. */
     public static ITaskFilter titleContains(String token, boolean ignoreCase) {
-        final String normalized = normalizeToken(token);
-        return t -> contains(getOrEmpty(t.getTitle()), normalized, ignoreCase);
+        final String needle = token == null ? "" : token.trim();
+        return t -> contains(getOrEmpty(t.getTitle()), needle, ignoreCase);
     }
 
-    /**
-     * Matches tasks whose description contains the given token.
-     * @param token non-empty token
-     * @param ignoreCase true to ignore case
-     * @return a filter for description containment
-     */
+    /** Filter by description containing token (case-insensitive by default). */
+    public static ITaskFilter descriptionContains(String token) {
+        return descriptionContains(token, true);
+    }
+
+    /** Filter by description containing token with control over case-sensitivity. */
     public static ITaskFilter descriptionContains(String token, boolean ignoreCase) {
-        final String normalized = normalizeToken(token);
-        return t -> contains(getOrEmpty(t.getDescription()), normalized, ignoreCase);
+        final String needle = token == null ? "" : token.trim();
+        return t -> contains(getOrEmpty(t.getDescription()), needle, ignoreCase);
     }
 
-    /**
-     * Logical AND over multiple filters. Returns {@link #any()} if array is empty.
-     * @param filters non-null array (elements non-null)
-     * @return combined AND filter
-     */
-    public static ITaskFilter and(ITaskFilter... filters) {
-        if (filters == null || filters.length == 0) {
-            return any();
-        }
-        return t -> {
-            for (ITaskFilter f : filters) {
-                if (f == null || !f.test(t)) return false;
-            }
-            return true;
-        };
+    /** Filter by exact id. */
+    public static ITaskFilter idEquals(int id) {
+        return t -> t != null && t.getId() == id;
     }
 
-    /**
-     * Logical OR over multiple filters. Returns {@link #none()} if array is empty.
-     * @param filters non-null array (elements non-null)
-     * @return combined OR filter
-     */
-    public static ITaskFilter or(ITaskFilter... filters) {
-        if (filters == null || filters.length == 0) {
-            return none();
-        }
-        return t -> {
-            for (ITaskFilter f : filters) {
-                if (f != null && f.test(t)) return true;
-            }
-            return false;
-        };
-    }
+    // ---- helpers ----
 
-    /**
-     * Negates a filter.
-     * @param filter non-null filter
-     * @return negated filter
-     */
-    public static ITaskFilter not(ITaskFilter filter) {
-        Objects.requireNonNull(filter, "filter");
-        return filter.negate();
-    }
-
-    /**
-     * Applies the filter to the given array and returns a new array with matches.
-     * (DAO returns arrays לפי הדרישה, לכן כאן מחזירים מערך.)
-     * @param tasks array of tasks (non-null)
-     * @param filter filter to apply (non-null)
-     * @return new array containing only matching tasks
-     */
-    public static ITask[] apply(ITask[] tasks, ITaskFilter filter) {
-        Objects.requireNonNull(tasks, "tasks");
-        Objects.requireNonNull(filter, "filter");
-        List<ITask> out = new ArrayList<>();
-        for (ITask t : tasks) {
-            if (t != null && filter.test(t)) {
-                out.add(t);
-            }
-        }
-        return out.toArray(ITask[]::new);
-        // Java 24: method reference array constructor supported
-    }
-
-    // ---------- helpers ----------
-
-    private static String getOrEmpty(String s) {
-        return s == null ? "" : s;
-    }
-
-    private static boolean contains(String text, String token, boolean ignoreCase) {
+    static boolean contains(String haystack, String needle, boolean ignoreCase) {
         if (ignoreCase) {
-            return text.toLowerCase().contains(token.toLowerCase());
+            return haystack.toLowerCase().contains(needle.toLowerCase());
         }
-        return text.contains(token);
+        return haystack.contains(needle);
     }
 
-    private static String normalizeToken(String token) {
-        if (token == null || token.trim().isEmpty()) {
-            throw new IllegalArgumentException("token must be non-empty");
-        }
-        return token.trim();
+    static String getOrEmpty(String s) {
+        return (s == null) ? "" : s;
     }
 }

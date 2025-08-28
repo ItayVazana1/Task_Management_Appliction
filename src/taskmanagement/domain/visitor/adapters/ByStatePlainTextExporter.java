@@ -1,23 +1,26 @@
 package taskmanagement.domain.visitor.adapters;
 
 import taskmanagement.domain.visitor.reports.ByStateCount;
-import taskmanagement.domain.visitor.reports.Report;
 
 /**
- * Adapter that exports ByStateCount report into plain text format.
+ * Plain text exporter for {@link ByStateCount}.
  */
-public class ByStatePlainTextExporter implements IReportExporter {
+public final class ByStatePlainTextExporter implements IReportExporter<ByStateCount> {
 
     @Override
-    public String export(Report report) {
-        if (!(report instanceof ByStateCount count)) {
-            throw new IllegalArgumentException("Unsupported report type: " + report);
+    public String export(ByStateCount report) {
+        if (report == null) {
+            throw new IllegalArgumentException("report is null");
         }
-        return "Tasks Report (Plain Text)\n"
-                + "------------------------\n"
-                + "ToDo:       " + count.todo() + "\n"
-                + "InProgress: " + count.inProgress() + "\n"
-                + "Completed:  " + count.completed() + "\n"
-                + "Total:      " + count.total();
+        int total = report.todo() + report.inProgress() + report.completed();
+
+        String nl = System.lineSeparator();
+        StringBuilder sb = new StringBuilder();
+        sb.append("Tasks by state").append(nl);
+        sb.append("ToDo: ").append(report.todo()).append(nl);
+        sb.append("InProgress: ").append(report.inProgress()).append(nl);
+        sb.append("Completed: ").append(report.completed()).append(nl);
+        sb.append("Total: ").append(total).append(nl);
+        return sb.toString();
     }
 }

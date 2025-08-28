@@ -1,4 +1,4 @@
-Generated: 2025-08-28 14:41:29 (local)
+Generated: 2025-08-28 15:16:41 (local)
 
 Task_Management_Appliction/
 ├── .gitignore [OK]
@@ -15,7 +15,8 @@ Task_Management_Appliction/
     └── taskmanagement/
         ├── app/
         │   ├── App.java [EMPTY]
-        │   └── Bootstrap.java [EMPTY]
+        │   ├── Bootstrap.java [EMPTY]
+        │   └── IntegrationSmoke.java [OK]
         ├── application/
         │   └── viewmodel/
         │       ├── TasksViewModel.java [EMPTY]
@@ -53,13 +54,13 @@ Task_Management_Appliction/
         │           ├── ByStateCount.java [OK]
         │           └── Report.java [OK]
         ├── persistence/
-        │   ├── DAOProvider.java [EMPTY]
+        │   ├── DAOProvider.java [OK]
         │   ├── ITasksDAO.java [OK]
         │   ├── TasksDAOException.java [OK]
         │   └── derby/
-        │       ├── DerbyBootstrap.java [EMPTY]
-        │       ├── DerbyConfig.java [EMPTY]
-        │       └── EmbeddedDerbyTasksDAO.java [EMPTY]
+        │       ├── DerbyBootstrap.java [OK]
+        │       ├── DerbyConfig.java [OK]
+        │       └── EmbeddedDerbyTasksDAO.java [OK]
         ├── ui/
         │   ├── MainFrame.java [EMPTY]
         │   └── panels/
