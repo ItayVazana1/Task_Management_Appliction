@@ -2,11 +2,14 @@ package taskmanagement.persistence;
 
 import taskmanagement.persistence.derby.EmbeddedDerbyTasksDAO;
 
-/** Central accessor for the concrete DAO instance. */
+/**
+ * Central provider for concrete DAO implementations.
+ */
 public final class DAOProvider {
-    private DAOProvider() {}
+    private DAOProvider() { }
 
-    public static ITasksDAO tasksDAO() throws TasksDAOException {
+    public static ITasksDAO tasksDAO() {
+        // Singleton DAO (one connection per process)
         return EmbeddedDerbyTasksDAO.getInstance();
     }
 }

@@ -1,0 +1,65 @@
+Thu Aug 28 16:42:05 IDT 2025 Thread[#3,main,5,main] Cleanup action starting
+java.sql.SQLException: Database 'data/tasksdb' not found.
+	at org.apache.derby.impl.jdbc.SQLExceptionFactory.getSQLException(SQLExceptionFactory.java:115)
+	at org.apache.derby.impl.jdbc.SQLExceptionFactory.getSQLException(SQLExceptionFactory.java:141)
+	at org.apache.derby.impl.jdbc.Util.generateCsSQLException(Util.java:225)
+	at org.apache.derby.impl.jdbc.Util.generateCsSQLException(Util.java:220)
+	at org.apache.derby.impl.jdbc.EmbedConnection.newSQLException(EmbedConnection.java:3208)
+	at org.apache.derby.impl.jdbc.EmbedConnection.handleDBNotFound(EmbedConnection.java:767)
+	at org.apache.derby.impl.jdbc.EmbedConnection.<init>(EmbedConnection.java:437)
+	at org.apache.derby.iapi.jdbc.InternalDriver.getNewEmbedConnection(InternalDriver.java:629)
+	at org.apache.derby.iapi.jdbc.InternalDriver.connect(InternalDriver.java:295)
+	at org.apache.derby.iapi.jdbc.InternalDriver.connect(InternalDriver.java:921)
+	at org.apache.derby.iapi.jdbc.AutoloadedDriver.connect(AutoloadedDriver.java:132)
+	at java.sql/java.sql.DriverManager.getConnection(DriverManager.java:613)
+	at java.sql/java.sql.DriverManager.getConnection(DriverManager.java:222)
+	at taskmanagement.persistence.derby.DerbyBootstrap.bootAndEnsureSchema(DerbyBootstrap.java:54)
+	at taskmanagement.persistence.derby.EmbeddedDerbyTasksDAO.<init>(EmbeddedDerbyTasksDAO.java:25)
+	at taskmanagement.persistence.derby.EmbeddedDerbyTasksDAO.getInstance(EmbeddedDerbyTasksDAO.java:34)
+	at taskmanagement.persistence.DAOProvider.tasksDAO(DAOProvider.java:13)
+	at taskmanagement.app.IntegrationSmoke.main(IntegrationSmoke.java:43)
+Caused by: ERROR XJ004: Database 'data/tasksdb' not found.
+	at org.apache.derby.shared.common.error.StandardException.newException(StandardException.java:299)
+	at org.apache.derby.impl.jdbc.SQLExceptionFactory.wrapArgsForTransportAcrossDRDA(SQLExceptionFactory.java:170)
+	at org.apache.derby.impl.jdbc.SQLExceptionFactory.getSQLException(SQLExceptionFactory.java:75)
+	... 17 more
+============= begin nested exception, level (1) ===========
+ERROR XJ004: Database 'data/tasksdb' not found.
+	at org.apache.derby.shared.common.error.StandardException.newException(StandardException.java:299)
+	at org.apache.derby.impl.jdbc.SQLExceptionFactory.wrapArgsForTransportAcrossDRDA(SQLExceptionFactory.java:170)
+	at org.apache.derby.impl.jdbc.SQLExceptionFactory.getSQLException(SQLExceptionFactory.java:75)
+	at org.apache.derby.impl.jdbc.SQLExceptionFactory.getSQLException(SQLExceptionFactory.java:141)
+	at org.apache.derby.impl.jdbc.Util.generateCsSQLException(Util.java:225)
+	at org.apache.derby.impl.jdbc.Util.generateCsSQLException(Util.java:220)
+	at org.apache.derby.impl.jdbc.EmbedConnection.newSQLException(EmbedConnection.java:3208)
+	at org.apache.derby.impl.jdbc.EmbedConnection.handleDBNotFound(EmbedConnection.java:767)
+	at org.apache.derby.impl.jdbc.EmbedConnection.<init>(EmbedConnection.java:437)
+	at org.apache.derby.iapi.jdbc.InternalDriver.getNewEmbedConnection(InternalDriver.java:629)
+	at org.apache.derby.iapi.jdbc.InternalDriver.connect(InternalDriver.java:295)
+	at org.apache.derby.iapi.jdbc.InternalDriver.connect(InternalDriver.java:921)
+	at org.apache.derby.iapi.jdbc.AutoloadedDriver.connect(AutoloadedDriver.java:132)
+	at java.sql/java.sql.DriverManager.getConnection(DriverManager.java:613)
+	at java.sql/java.sql.DriverManager.getConnection(DriverManager.java:222)
+	at taskmanagement.persistence.derby.DerbyBootstrap.bootAndEnsureSchema(DerbyBootstrap.java:54)
+	at taskmanagement.persistence.derby.EmbeddedDerbyTasksDAO.<init>(EmbeddedDerbyTasksDAO.java:25)
+	at taskmanagement.persistence.derby.EmbeddedDerbyTasksDAO.getInstance(EmbeddedDerbyTasksDAO.java:34)
+	at taskmanagement.persistence.DAOProvider.tasksDAO(DAOProvider.java:13)
+	at taskmanagement.app.IntegrationSmoke.main(IntegrationSmoke.java:43)
+============= end nested exception, level (1) ===========
+Cleanup action completed
+----------------------------------------------------------------
+Thu Aug 28 16:42:05 IDT 2025:
+Booting Derby version The Apache Software Foundation - Apache Derby - 10.17.1.0 - (1913217): instance a816c00e-0198-f0ea-03e2-000007163ce0 
+on database directory C:\Users\Itay_Vazana\Desktop\BSc CS\Design Patterns\Final_Project\Task_Management_Appliction\data\tasksdb with class loader jdk.internal.loader.ClassLoaders$AppClassLoader@18b4aac2 
+Loaded from file:/C:/Users/Itay_Vazana/Desktop/BSc%20CS/Design%20Patterns/Final_Project/Task_Management_Appliction/lib/derby.jar
+java.vendor=Eclipse Adoptium
+java.runtime.version=24.0.2+12
+user.dir=C:\Users\Itay_Vazana\Desktop\BSc CS\Design Patterns\Final_Project\Task_Management_Appliction
+os.name=Windows 10
+os.arch=amd64
+os.version=10.0
+derby.system.home=null
+Database Class Loader started - derby.database.classpath=''
+----------------------------------------------------------------
+Thu Aug 28 16:42:06 IDT 2025:
+Shutting down instance a816c00e-0198-f0ea-03e2-000007163ce0 on database directory C:\Users\Itay_Vazana\Desktop\BSc CS\Design Patterns\Final_Project\Task_Management_Appliction\data\tasksdb with class loader jdk.internal.loader.ClassLoaders$AppClassLoader@18b4aac2 

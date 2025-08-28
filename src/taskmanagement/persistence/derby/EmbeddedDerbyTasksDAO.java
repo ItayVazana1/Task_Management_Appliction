@@ -10,163 +10,152 @@ import taskmanagement.persistence.TasksDAOException;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
- * Embedded Derby implementation of {@link ITasksDAO}.
- * <p>
- * Pattern notes:
- * <ul>
- *   <li><b>DAO</b> — encapsulates all DB access for tasks.</li>
- *   <li><b>Singleton</b> — single shared instance via {@link #getInstance()}.</li>
- * </ul>
- * All checked/validation/data errors are wrapped in {@link TasksDAOException}.
+ * Embedded Derby DAO (Singleton).
+ * Maintains a single Connection per process and adds a JVM shutdown hook to close DB cleanly.
  */
-public final class EmbeddedDerbyTasksDAO implements ITasksDAO {
+public final class EmbeddedDerbyTasksDAO implements ITasksDAO, AutoCloseable {
 
-    /** Singleton holder. */
-    private static volatile EmbeddedDerbyTasksDAO instance;
+    private static volatile EmbeddedDerbyTasksDAO INSTANCE;
+    private final Connection conn;
 
-    /** Private C'tor — initializes Derby schema if missing. */
-    private EmbeddedDerbyTasksDAO() throws TasksDAOException {
-        try {
-            DerbyBootstrap.ensureSchema();
-        } catch (Exception e) {
-            throw new TasksDAOException("Failed to initialize Derby schema", e);
-        }
+    private EmbeddedDerbyTasksDAO() {
+        this.conn = DerbyBootstrap.bootAndEnsureSchema();
+        Runtime.getRuntime().addShutdownHook(new Thread(DerbyBootstrap::shutdownQuietly, "DerbyShutdown"));
     }
 
-    /**
-     * Global accessor (Singleton, double-checked locking).
-     *
-     * @return the single DAO instance
-     * @throws TasksDAOException if initialization fails
-     */
-    public static EmbeddedDerbyTasksDAO getInstance() throws TasksDAOException {
-        if (instance == null) {
+    /** Singleton accessor. */
+    public static EmbeddedDerbyTasksDAO getInstance() {
+        if (INSTANCE == null) {
             synchronized (EmbeddedDerbyTasksDAO.class) {
-                if (instance == null) {
-                    instance = new EmbeddedDerbyTasksDAO();
+                if (INSTANCE == null) {
+                    INSTANCE = new EmbeddedDerbyTasksDAO();
                 }
             }
         }
-        return instance;
+        return INSTANCE;
     }
 
-    /** Opens a new JDBC connection to the embedded Derby DB. */
-    private Connection conn() throws SQLException {
-        return DriverManager.getConnection(DerbyConfig.URL);
-    }
-
-    // ----------------------------------------------------
-    // ITasksDAO implementation
-    // ----------------------------------------------------
-
-    /** {@inheritDoc} */
     @Override
     public ITask[] getTasks() throws TasksDAOException {
-        final String sql = "SELECT ID, TITLE, DESCRIPTION, STATE FROM " + DerbyConfig.TABLE_TASKS + " ORDER BY ID";
+        final String sql = "SELECT id, title, description, state FROM tasks ORDER BY id";
         final List<ITask> list = new ArrayList<>();
-        try (Connection c = conn();
-             PreparedStatement ps = c.prepareStatement(sql);
+        try (PreparedStatement ps = conn.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
-            while (rs.next()) {
-                list.add(mapRow(rs));
-            }
-            return list.toArray(new ITask[0]);
-        } catch (SQLException | ValidationException e) {
+            while (rs.next()) list.add(mapRow(rs));
+            return list.toArray(ITask[]::new);
+        } catch (SQLException e) {
             throw new TasksDAOException("getTasks failed", e);
         }
     }
 
-    /** {@inheritDoc} */
     @Override
     public ITask getTask(int id) throws TasksDAOException {
-        final String sql = "SELECT ID, TITLE, DESCRIPTION, STATE FROM " + DerbyConfig.TABLE_TASKS + " WHERE ID=?";
-        try (Connection c = conn(); PreparedStatement ps = c.prepareStatement(sql)) {
+        final String sql = "SELECT id, title, description, state FROM tasks WHERE id = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
             try (ResultSet rs = ps.executeQuery()) {
                 return rs.next() ? mapRow(rs) : null;
             }
-        } catch (SQLException | ValidationException e) {
-            throw new TasksDAOException("getTask failed id=" + id, e);
+        } catch (SQLException e) {
+            throw new TasksDAOException("getTask failed for id=" + id, e);
         }
     }
 
-    /** {@inheritDoc} */
     @Override
     public void addTask(ITask task) throws TasksDAOException {
-        final String sql = "INSERT INTO " + DerbyConfig.TABLE_TASKS + " (ID, TITLE, DESCRIPTION, STATE) VALUES (?,?,?,?)";
-        try (Connection c = conn(); PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setInt(1, task.getId());
-            ps.setString(2, task.getTitle());
-            ps.setString(3, task.getDescription());
-            ps.setString(4, task.getState().name());
-            ps.executeUpdate();
+        Objects.requireNonNull(task, "task");
+        final String sql = "INSERT INTO tasks(id, title, description, state) VALUES (?, ?, ?, ?)";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            bindTask(ps, task);
+            final int n = ps.executeUpdate();
+            if (n != 1) throw new TasksDAOException("addTask affected " + n + " rows");
         } catch (SQLException e) {
-            throw new TasksDAOException("addTask failed id=" + task.getId(), e);
+            // Derby duplicate key
+            if ("23505".equals(e.getSQLState())) {
+                throw new TasksDAOException("addTask failed: id " + task.getId() + " already exists", e);
+            }
+            throw new TasksDAOException("addTask failed for id=" + task.getId(), e);
         }
     }
 
-    /** {@inheritDoc} */
     @Override
     public void updateTask(ITask task) throws TasksDAOException {
-        final String sql = "UPDATE " + DerbyConfig.TABLE_TASKS + " SET TITLE=?, DESCRIPTION=?, STATE=? WHERE ID=?";
-        try (Connection c = conn(); PreparedStatement ps = c.prepareStatement(sql)) {
+        Objects.requireNonNull(task, "task");
+        final String sql = "UPDATE tasks SET title = ?, description = ?, state = ? WHERE id = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, task.getTitle());
             ps.setString(2, task.getDescription());
             ps.setString(3, task.getState().name());
             ps.setInt(4, task.getId());
-            ps.executeUpdate();
+            final int n = ps.executeUpdate();
+            if (n != 1) {
+                throw new TasksDAOException("updateTask updated " + n + " rows (expected 1). id=" + task.getId());
+            }
         } catch (SQLException e) {
-            throw new TasksDAOException("updateTask failed id=" + task.getId(), e);
+            throw new TasksDAOException("updateTask failed for id=" + task.getId(), e);
         }
     }
 
-    /** {@inheritDoc} */
     @Override
     public void deleteTasks() throws TasksDAOException {
-        final String sql = "DELETE FROM " + DerbyConfig.TABLE_TASKS;
-        try (Connection c = conn(); PreparedStatement ps = c.prepareStatement(sql)) {
+        final String sql = "DELETE FROM tasks";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.executeUpdate();
         } catch (SQLException e) {
             throw new TasksDAOException("deleteTasks failed", e);
         }
     }
 
-    /** {@inheritDoc} */
     @Override
     public void deleteTask(int id) throws TasksDAOException {
-        final String sql = "DELETE FROM " + DerbyConfig.TABLE_TASKS + " WHERE ID=?";
-        try (Connection c = conn(); PreparedStatement ps = c.prepareStatement(sql)) {
+        final String sql = "DELETE FROM tasks WHERE id = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
-            ps.executeUpdate();
+            final int n = ps.executeUpdate();
+            if (n != 1) {
+                throw new TasksDAOException("deleteTask removed " + n + " rows (expected 1). id=" + id);
+            }
         } catch (SQLException e) {
-            throw new TasksDAOException("deleteTask failed id=" + id, e);
+            throw new TasksDAOException("deleteTask failed for id=" + id, e);
         }
     }
 
-    // ----------------------------------------------------
-    // Helpers
-    // ----------------------------------------------------
+    // ---------- helpers ----------
 
-    /**
-     * Maps the current {@link ResultSet} row to a domain {@link ITask}.
-     * Wraps invalid enum values as {@link SQLException} and lets domain validation bubble as {@link ValidationException}.
-     */
-    private static ITask mapRow(ResultSet rs) throws SQLException, ValidationException {
-        final int id = rs.getInt("ID");
-        final String title = rs.getString("TITLE");
-        final String desc = rs.getString("DESCRIPTION");
+    private static void bindTask(PreparedStatement ps, ITask t) throws SQLException {
+        ps.setInt(1, t.getId());
+        ps.setString(2, t.getTitle());
+        ps.setString(3, t.getDescription());
+        ps.setString(4, t.getState().name()); // store enum name exactly
+    }
 
-        final String stateStr = rs.getString("STATE");
-        final TaskState state;
+    private static ITask mapRow(ResultSet rs) {
         try {
-            state = TaskState.valueOf(stateStr);
-        } catch (IllegalArgumentException iae) {
-            // Defensive: corrupted/unknown enum value in DB
-            throw new SQLException("Invalid STATE enum value in DB: " + stateStr, iae);
+            final int id = rs.getInt("id");
+            final String title = rs.getString("title");
+            final String desc = rs.getString("description");
+            final String stateStr = rs.getString("state");
+            final TaskState state;
+            try {
+                state = TaskState.valueOf(stateStr);
+            } catch (IllegalArgumentException iae) {
+                // Defensive: corrupted/unknown enum value in DB
+                throw new SQLException("Invalid STATE enum value in DB: " + stateStr, iae);
+            }
+            return new Task(id, title, desc, state);
+        } catch (SQLException e) {
+            throw new TasksDAOException("Failed mapping row", e);
+        } catch (ValidationException ve) {
+            throw new TasksDAOException("Domain validation failed while mapping DB row", ve);
         }
-        // Task constructor/setters may validate and throw ValidationException (checked)
-        return new Task(id, title, desc, state);
+    }
+
+    @Override
+    public void close() {
+        try { if (conn != null && !conn.isClosed()) conn.close(); }
+        catch (SQLException ignore) { }
     }
 }

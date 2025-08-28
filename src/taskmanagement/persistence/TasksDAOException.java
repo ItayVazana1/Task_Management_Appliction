@@ -1,24 +1,9 @@
 package taskmanagement.persistence;
 
 /**
- * Project-specific exception for DAO operations in the Tasks module.
+ * Project-specific exception for persistence/DAO errors.
  */
-public class TasksDAOException extends Exception {
-
-    /**
-     * Creates a new TasksDAOException with a message.
-     * @param message detail message
-     */
-    public TasksDAOException(String message) {
-        super(message);
-    }
-
-    /**
-     * Creates a new TasksDAOException with a message and a root cause.
-     * @param message detail message
-     * @param cause   root cause
-     */
-    public TasksDAOException(String message, Throwable cause) {
-        super(message, cause);
-    }
+public class TasksDAOException extends RuntimeException {
+    public TasksDAOException(String message) { super(message); }
+    public TasksDAOException(String message, Throwable cause) { super(message, cause); }
 }

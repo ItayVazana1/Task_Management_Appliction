@@ -1,27 +1,25 @@
 package taskmanagement.persistence.derby;
 
-/**
- * Central Derby configuration (embedded mode).
- * Keeps JDBC driver, URL and SQL DDL constants.
- */
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
 public final class DerbyConfig {
+    public static final Path DB_DIR = Paths.get("data", "tasksdb");
+
+    /** Normal boot – DO NOT use create=true here. */
+    public static String urlBoot() {
+        return "jdbc:derby:" + DB_DIR.toString().replace('\\','/');
+    }
+
+    /** Create path – only when the DB does not exist. */
+    public static String urlCreate() {
+        return urlBoot() + ";create=true";
+    }
+
+    /** Clean shutdown. */
+    public static String urlShutdown() {
+        return urlBoot() + ";shutdown=true";
+    }
+
     private DerbyConfig() { }
-
-    /** Embedded driver class name. */
-    public static final String DRIVER = "org.apache.derby.jdbc.EmbeddedDriver";
-
-    /** DB location under ./data; create if missing. */
-    public static final String URL = "jdbc:derby:data/tasksdb;create=true";
-
-    /** Table names. */
-    public static final String TABLE_TASKS = "TASKS";
-
-    /** Minimal schema for tasks (IDs managed by the app). */
-    public static final String SQL_CREATE_TASKS =
-            "CREATE TABLE " + TABLE_TASKS + " (" +
-                    "  ID INT PRIMARY KEY, " +
-                    "  TITLE VARCHAR(200) NOT NULL, " +
-                    "  DESCRIPTION VARCHAR(2000) NOT NULL, " +
-                    "  STATE VARCHAR(32) NOT NULL" +
-                    ")";
 }
