@@ -1,13 +1,12 @@
 package taskmanagement.domain.visitor;
 
 import taskmanagement.domain.ITask;
-import taskmanagement.domain.TaskState;
 import taskmanagement.domain.visitor.reports.ByStateCount;
 
 /**
  * TaskVisitor that counts tasks by their state and produces a ByStateCount report.
  */
-public class CountByStateVisitor implements TaskVisitor {
+public class CountByStateVisitor implements ITaskVisitor {
 
     private int todo;
     private int inProgress;

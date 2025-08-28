@@ -5,7 +5,7 @@ import taskmanagement.domain.visitor.reports.Report;
 /**
  * Adapter interface to export a Report into a textual representation.
  */
-public interface ReportExporter {
+public interface IReportExporter {
     /**
      * Exports the given report into a textual format.
      * @param report non-null report

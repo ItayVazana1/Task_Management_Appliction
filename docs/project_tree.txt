@@ -1,0 +1,70 @@
+Generated: 2025-08-28 14:41:29 (local)
+
+Task_Management_Appliction/
+├── .gitignore [OK]
+├── DumpTree.py [OK]
+├── PATTERNS.txt [OK]
+├── docs/
+│   ├── Java_Style_and_doc_guideline.md [OK]
+│   ├── Project_TODO.md [OK]
+│   ├── Requirements.md [OK]
+│   └── project_tree.txt [EMPTY]
+├── lib/
+│   └── flatlaf-3.6.jar [OK]
+└── src/
+    └── taskmanagement/
+        ├── app/
+        │   ├── App.java [EMPTY]
+        │   └── Bootstrap.java [EMPTY]
+        ├── application/
+        │   └── viewmodel/
+        │       ├── TasksViewModel.java [EMPTY]
+        │       ├── commands/
+        │       │   ├── AddTaskCommand.java [EMPTY]
+        │       │   ├── Command.java [EMPTY]
+        │       │   ├── CommandStack.java [EMPTY]
+        │       │   ├── DeleteTaskCommand.java [EMPTY]
+        │       │   ├── MarkStateCommand.java [EMPTY]
+        │       │   └── UpdateTaskCommand.java [EMPTY]
+        │       ├── events/
+        │       │   ├── ObservableList.java [EMPTY]
+        │       │   └── Property.java [EMPTY]
+        │       └── sort/
+        │           ├── SortByState.java [EMPTY]
+        │           ├── SortByTitle.java [EMPTY]
+        │           └── SortStrategy.java [EMPTY]
+        ├── domain/
+        │   ├── ITask.java [OK]
+        │   ├── Task.java [OK]
+        │   ├── TaskState.java [OK]
+        │   ├── exceptions/
+        │   │   └── ValidationException.java [OK]
+        │   ├── filter/
+        │   │   ├── Filters.java [OK]
+        │   │   └── ITaskFilter.java [OK]
+        │   └── visitor/
+        │       ├── CountByStateVisitor.java [OK]
+        │       ├── ITaskVisitor.java [OK]
+        │       ├── adapters/
+        │       │   ├── ByStateCsvExporter.java [OK]
+        │       │   ├── ByStatePlainTextExporter.java [OK]
+        │       │   └── IReportExporter.java [OK]
+        │       └── reports/
+        │           ├── ByStateCount.java [OK]
+        │           └── Report.java [OK]
+        ├── persistence/
+        │   ├── DAOProvider.java [EMPTY]
+        │   ├── ITasksDAO.java [OK]
+        │   ├── TasksDAOException.java [OK]
+        │   └── derby/
+        │       ├── DerbyBootstrap.java [EMPTY]
+        │       ├── DerbyConfig.java [EMPTY]
+        │       └── EmbeddedDerbyTasksDAO.java [EMPTY]
+        ├── ui/
+        │   ├── MainFrame.java [EMPTY]
+        │   └── panels/
+        │       ├── FiltersPanel.java [EMPTY]
+        │       ├── TaskEditorDialog.java [EMPTY]
+        │       └── TaskListPanel.java [EMPTY]
+        └── util/
+            └── Strings.java [EMPTY]

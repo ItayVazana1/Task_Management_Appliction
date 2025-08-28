@@ -19,14 +19,14 @@ public final class Filters {
     /**
      * A filter that always matches.
      */
-    public static TaskFilter any() {
+    public static ITaskFilter any() {
         return t -> true;
     }
 
     /**
      * A filter that never matches.
      */
-    public static TaskFilter none() {
+    public static ITaskFilter none() {
         return t -> false;
     }
 
@@ -35,7 +35,7 @@ public final class Filters {
      * @param predicate predicate (non-null)
      * @return TaskFilter wrapping the predicate
      */
-    public static TaskFilter of(Predicate<ITask> predicate) {
+    public static ITaskFilter of(Predicate<ITask> predicate) {
         Objects.requireNonNull(predicate, "predicate");
         return predicate::test;
     }
@@ -45,7 +45,7 @@ public final class Filters {
      * @param state non-null state to match
      * @return a filter for the given state
      */
-    public static TaskFilter byState(TaskState state) {
+    public static ITaskFilter byState(TaskState state) {
         Objects.requireNonNull(state, "state");
         return t -> t != null && state.equals(t.getState());
     }
@@ -56,7 +56,7 @@ public final class Filters {
      * @param ignoreCase true to ignore case
      * @return a filter for title containment
      */
-    public static TaskFilter titleContains(String token, boolean ignoreCase) {
+    public static ITaskFilter titleContains(String token, boolean ignoreCase) {
         final String normalized = normalizeToken(token);
         return t -> contains(getOrEmpty(t.getTitle()), normalized, ignoreCase);
     }
@@ -67,7 +67,7 @@ public final class Filters {
      * @param ignoreCase true to ignore case
      * @return a filter for description containment
      */
-    public static TaskFilter descriptionContains(String token, boolean ignoreCase) {
+    public static ITaskFilter descriptionContains(String token, boolean ignoreCase) {
         final String normalized = normalizeToken(token);
         return t -> contains(getOrEmpty(t.getDescription()), normalized, ignoreCase);
     }
@@ -77,12 +77,12 @@ public final class Filters {
      * @param filters non-null array (elements non-null)
      * @return combined AND filter
      */
-    public static TaskFilter and(TaskFilter... filters) {
+    public static ITaskFilter and(ITaskFilter... filters) {
         if (filters == null || filters.length == 0) {
             return any();
         }
         return t -> {
-            for (TaskFilter f : filters) {
+            for (ITaskFilter f : filters) {
                 if (f == null || !f.test(t)) return false;
             }
             return true;
@@ -94,12 +94,12 @@ public final class Filters {
      * @param filters non-null array (elements non-null)
      * @return combined OR filter
      */
-    public static TaskFilter or(TaskFilter... filters) {
+    public static ITaskFilter or(ITaskFilter... filters) {
         if (filters == null || filters.length == 0) {
             return none();
         }
         return t -> {
-            for (TaskFilter f : filters) {
+            for (ITaskFilter f : filters) {
                 if (f != null && f.test(t)) return true;
             }
             return false;
@@ -111,7 +111,7 @@ public final class Filters {
      * @param filter non-null filter
      * @return negated filter
      */
-    public static TaskFilter not(TaskFilter filter) {
+    public static ITaskFilter not(ITaskFilter filter) {
         Objects.requireNonNull(filter, "filter");
         return filter.negate();
     }
@@ -123,7 +123,7 @@ public final class Filters {
      * @param filter filter to apply (non-null)
      * @return new array containing only matching tasks
      */
-    public static ITask[] apply(ITask[] tasks, TaskFilter filter) {
+    public static ITask[] apply(ITask[] tasks, ITaskFilter filter) {
         Objects.requireNonNull(tasks, "tasks");
         Objects.requireNonNull(filter, "filter");
         List<ITask> out = new ArrayList<>();

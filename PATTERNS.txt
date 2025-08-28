@@ -1,6 +1,6 @@
 Mandatory:
-- Combinator: task filters (taskmanagement.domain.filter.TaskFilter, Filters)
-- Visitor: reporting over tasks (taskmanagement.domain.visitor.TaskVisitor + reports.adapters)
+- Combinator: task filters (taskmanagement.domain.filter.ITaskFilter, Filters)
+- Visitor: reporting over tasks (taskmanagement.domain.visitor.ITaskVisitor + reports.adapters)
 
 Additional (4):
 - Observer: ViewModel -> View updates (ui observes application layer)

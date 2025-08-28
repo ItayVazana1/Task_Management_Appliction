@@ -7,7 +7,7 @@ import taskmanagement.domain.ITask;
  * <p>Implementations return true if a task matches the filter.</p>
  */
 @FunctionalInterface
-public interface TaskFilter {
+public interface ITaskFilter {
     /**
      * Tests whether the given task matches this filter.
      * @param task task to test (non-null)
@@ -20,7 +20,7 @@ public interface TaskFilter {
      * @param other another filter (non-null)
      * @return combined AND filter
      */
-    default TaskFilter and(TaskFilter other) {
+    default ITaskFilter and(ITaskFilter other) {
         if (other == null) throw new IllegalArgumentException("other must be non-null");
         return t -> this.test(t) && other.test(t);
     }
@@ -30,7 +30,7 @@ public interface TaskFilter {
      * @param other another filter (non-null)
      * @return combined OR filter
      */
-    default TaskFilter or(TaskFilter other) {
+    default ITaskFilter or(ITaskFilter other) {
         if (other == null) throw new IllegalArgumentException("other must be non-null");
         return t -> this.test(t) || other.test(t);
     }
@@ -39,7 +39,7 @@ public interface TaskFilter {
      * Returns a filter that negates this filter.
      * @return negated filter
      */
-    default TaskFilter negate() {
+    default ITaskFilter negate() {
         return t -> !this.test(t);
     }
 }

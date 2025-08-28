@@ -7,7 +7,7 @@ import taskmanagement.domain.ITask;
  * <p>Kept minimal for now; can be extended alongside record-based reports later.</p>
  */
 @FunctionalInterface
-public interface TaskVisitor {
+public interface ITaskVisitor {
     /**
      * Visit a single task.
      * @param task the task to visit

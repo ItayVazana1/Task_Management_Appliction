@@ -6,7 +6,7 @@ import taskmanagement.domain.visitor.reports.Report;
 /**
  * Adapter that exports ByStateCount report into CSV format.
  */
-public class ByStateCsvExporter implements ReportExporter {
+public class ByStateCsvExporter implements IReportExporter {
 
     @Override
     public String export(Report report) {

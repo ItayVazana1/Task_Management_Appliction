@@ -1,8 +1,7 @@
 package taskmanagement.domain;
 
-import java.util.Objects;
 import taskmanagement.domain.exceptions.ValidationException;
-import taskmanagement.domain.visitor.TaskVisitor;
+import taskmanagement.domain.visitor.ITaskVisitor;
 
 /**
  * Concrete Task model implementing ITask.
@@ -110,7 +109,7 @@ public class Task implements ITask {
     }
 
     @Override
-    public void accept(taskmanagement.domain.visitor.TaskVisitor visitor) {
+    public void accept(ITaskVisitor visitor) {
         if (visitor == null) return;
         visitor.visit(this);
     }

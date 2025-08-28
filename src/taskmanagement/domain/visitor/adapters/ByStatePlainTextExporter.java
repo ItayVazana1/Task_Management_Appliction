@@ -6,7 +6,7 @@ import taskmanagement.domain.visitor.reports.Report;
 /**
  * Adapter that exports ByStateCount report into plain text format.
  */
-public class ByStatePlainTextExporter implements ReportExporter {
+public class ByStatePlainTextExporter implements IReportExporter {
 
     @Override
     public String export(Report report) {

@@ -1,6 +1,6 @@
 package taskmanagement.domain;
 
-import taskmanagement.domain.visitor.TaskVisitor;
+import taskmanagement.domain.visitor.ITaskVisitor;
 
 /**
  * Represents a task in the system.
@@ -31,5 +31,5 @@ public interface ITask {
      * Accepts a visitor for report/processing logic.
      * @param visitor the visitor to accept
      */
-    void accept(TaskVisitor visitor);
+    void accept(ITaskVisitor visitor);
 }
