@@ -132,6 +132,19 @@ public final class EmbeddedDerbyTasksDAO implements ITasksDAO, AutoCloseable {
         ps.setString(4, t.getState().name()); // store enum name exactly
     }
 
+    private static TasksDAOException explain(String op, SQLException e) {
+        String s = e.getSQLState();
+        String msg = switch (s) {
+            case "23505" -> "Duplicate id (PRIMARY KEY).";                // insert
+            case "23502" -> "A required (NOT NULL) column is missing.";   // insert/update
+            case "22001" -> "Value too long for column (data truncation).";
+            case "42821" -> "Datatype mismatch for a column.";
+            case "42X14" -> "SQL syntax error (check your query).";
+            default -> "SQLState=" + s + ", ErrorCode=" + e.getErrorCode();
+        };
+        return new TasksDAOException(op + " failed: " + msg, e);
+    }
+
     private static ITask mapRow(ResultSet rs) {
         try {
             final int id = rs.getInt("id");
