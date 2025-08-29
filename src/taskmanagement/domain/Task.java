@@ -8,12 +8,12 @@ import java.util.Objects;
 /**
  * Represents a single task in the system.
  * <p>
- * Follows the style guideline:
+ * Style highlights:
  * <ul>
- *     <li>Private fields</li>
- *     <li>Constructors call setters (validation happens in setters)</li>
- *     <li>Overrides equals/hashCode/toString</li>
- *     <li>Does not mix UI or persistence concerns</li>
+ *   <li>Private fields</li>
+ *   <li>Constructors call setters (validation happens in setters)</li>
+ *   <li>Overrides equals/hashCode/toString</li>
+ *   <li>No UI or persistence concerns (MVVM separation)</li>
  * </ul>
  */
 public class Task implements ITask {
@@ -37,13 +37,13 @@ public class Task implements ITask {
      * @param title       non-blank title
      * @param description optional description (null becomes empty string)
      * @param state       non-null state
-     * @throws ValidationException if any argument is invalid
+     * @throws ValidationException if any argument is invalid or transition is illegal
      */
     public Task(int id, String title, String description, TaskState state) throws ValidationException {
         setId(id);
         setTitle(title);
         setDescription(description);
-        setState(state);
+        setState(state); // constructors MUST call setters
     }
 
     /** {@inheritDoc} */
@@ -72,7 +72,6 @@ public class Task implements ITask {
 
     /**
      * Accepts a {@link TaskVisitor} (Visitor pattern).
-     *
      * @param visitor concrete visitor to apply
      */
     @Override
@@ -84,7 +83,6 @@ public class Task implements ITask {
 
     /**
      * Sets the id. Must be positive.
-     *
      * @param id positive id
      * @throws ValidationException if {@code id <= 0}
      */
@@ -97,7 +95,6 @@ public class Task implements ITask {
 
     /**
      * Sets the title. Must be non-null and non-blank.
-     *
      * @param title non-blank title
      * @throws ValidationException if title is null/blank
      */
@@ -110,7 +107,6 @@ public class Task implements ITask {
 
     /**
      * Sets the description. {@code null} becomes empty string.
-     *
      * @param description optional description
      */
     private void setDescription(String description) {
@@ -118,14 +114,23 @@ public class Task implements ITask {
     }
 
     /**
-     * Sets the state. Must be non-null.
+     * Changes task state if lifecycle rules allow it.
+     * Constructors call this setter as well.
      *
-     * @param state non-null state
-     * @throws ValidationException if state is null
+     * @param state desired state (must not be null)
+     * @throws ValidationException if state is null or transition is illegal
      */
-    private void setState(TaskState state) throws ValidationException {
+    public void setState(TaskState state) throws ValidationException {
         if (state == null) {
             throw new ValidationException("state is required");
+        }
+        if (this.state == null) {
+            // initial assignment (during construction or DB hydration) is allowed
+            this.state = state;
+            return;
+        }
+        if (!this.state.canTransitionTo(state)) {
+            throw new ValidationException("Illegal state transition: " + this.state + " -> " + state);
         }
         this.state = state;
     }
@@ -134,7 +139,6 @@ public class Task implements ITask {
 
     /**
      * Two tasks are equal if they share the same {@code id}.
-     *
      * @param o other object
      * @return {@code true} if same id
      */
