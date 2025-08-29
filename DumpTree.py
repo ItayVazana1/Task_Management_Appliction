@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 def print_tree(root, file, prefix=""):
     entries = sorted(os.listdir(root))
-    entries = [e for e in entries if e not in {".git", ".idea", "out", "build"}
+    entries = [e for e in entries if e not in {".git", ".idea", "out", "build", "data", "build-smoke"}
                and not e.endswith((".class",".iml"))]
 
     for i, entry in enumerate(entries):
