@@ -7,96 +7,77 @@ import java.util.Objects;
 
 /**
  * Represents a single task in the system.
- * <p>
- * Style highlights:
- * <ul>
- *   <li>Private fields</li>
- *   <li>Constructors call setters (validation happens in setters)</li>
- *   <li>Overrides equals/hashCode/toString</li>
- *   <li>No UI or persistence concerns (MVVM separation)</li>
- * </ul>
+ * Validation is performed in setters; constructors must call setters.
+ * For new (unsaved) tasks, id==0 is allowed as a placeholder (DAO will assign a real id).
  */
 public class Task implements ITask {
 
-    /** Unique positive identifier of the task. */
+    /** Identifier: 0 for unsaved placeholder; positive after persistence. */
     private int id;
 
     /** Non-empty title (trimmed). */
     private String title;
 
-    /** Optional description (never {@code null}; empty string if unspecified). */
+    /** Optional description (never null; empty string if unspecified). */
     private String description;
 
-    /** Current state of the task (must be non-null). */
+    /** Current state (non-null). */
     private TaskState state;
 
     /**
-     * Creates a new {@code Task}.
+     * Primary constructor.
      *
-     * @param id          positive identifier
-     * @param title       non-blank title
-     * @param description optional description (null becomes empty string)
-     * @param state       non-null state
-     * @throws ValidationException if any argument is invalid or transition is illegal
+     * @param id          0 (unsaved) or positive (persisted)
+     * @param title       non-blank
+     * @param description optional (null -> "")
+     * @param state       non-null
+     * @throws ValidationException if arguments are invalid or transition is illegal
      */
     public Task(int id, String title, String description, TaskState state) throws ValidationException {
         setId(id);
         setTitle(title);
         setDescription(description);
-        setState(state); // constructors MUST call setters
+        setState(state);
     }
 
-    /** {@inheritDoc} */
     @Override
-    public int getId() {
-        return id;
-    }
+    public int getId() { return id; }
 
-    /** {@inheritDoc} */
     @Override
-    public String getTitle() {
-        return title;
-    }
+    public String getTitle() { return title; }
 
-    /** {@inheritDoc} */
     @Override
-    public String getDescription() {
-        return description;
-    }
+    public String getDescription() { return description; }
 
-    /** {@inheritDoc} */
     @Override
-    public TaskState getState() {
-        return state;
-    }
+    public TaskState getState() { return state; }
 
     /**
-     * Accepts a {@link TaskVisitor} (Visitor pattern).
-     * @param visitor concrete visitor to apply
+     * Accepts a visitor (Visitor pattern).
      */
     @Override
     public void accept(TaskVisitor visitor) {
         visitor.visit(this);
     }
 
-    // ---------- validation setters (constructors must call setters) ----------
+    // ------------ validation setters ------------
 
     /**
-     * Sets the id. Must be positive.
-     * @param id positive id
-     * @throws ValidationException if {@code id <= 0}
+     * Sets the id.
+     * 0 is allowed to represent an unsaved task; positive means persisted.
+     *
+     * @param id 0 or positive
+     * @throws ValidationException if id is negative
      */
     private void setId(int id) throws ValidationException {
-        if (id <= 0) {
-            throw new ValidationException("id must be positive");
+        if (id < 0) {
+            throw new ValidationException("id must be zero (unsaved) or positive");
         }
         this.id = id;
     }
 
     /**
-     * Sets the title. Must be non-null and non-blank.
-     * @param title non-blank title
-     * @throws ValidationException if title is null/blank
+     * Sets the title (non-blank).
      */
     private void setTitle(String title) throws ValidationException {
         if (title == null || title.isBlank()) {
@@ -106,27 +87,21 @@ public class Task implements ITask {
     }
 
     /**
-     * Sets the description. {@code null} becomes empty string.
-     * @param description optional description
+     * Sets the description (null -> "").
      */
     private void setDescription(String description) {
         this.description = (description == null) ? "" : description.trim();
     }
 
     /**
-     * Changes task state if lifecycle rules allow it.
-     * Constructors call this setter as well.
-     *
-     * @param state desired state (must not be null)
-     * @throws ValidationException if state is null or transition is illegal
+     * Changes state while enforcing lifecycle rules.
      */
     public void setState(TaskState state) throws ValidationException {
         if (state == null) {
             throw new ValidationException("state is required");
         }
         if (this.state == null) {
-            // initial assignment (during construction or DB hydration) is allowed
-            this.state = state;
+            this.state = state; // initial assignment
             return;
         }
         if (!this.state.canTransitionTo(state)) {
@@ -135,29 +110,36 @@ public class Task implements ITask {
         this.state = state;
     }
 
-    // ---------- Object overrides ----------
+    // ------------ Object overrides ------------
 
     /**
-     * Two tasks are equal if they share the same {@code id}.
-     * @param o other object
-     * @return {@code true} if same id
+     * Equality:
+     * - If both ids are positive → compare by id.
+     * - If either id is 0 (unsaved) → fall back to reference equality.
      */
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof Task t)) return false; // Java 24 pattern matching for instanceof
-        return id == t.id;
+        if (!(o instanceof Task t)) return false;
+        if (this.id == 0 || t.id == 0) {
+            // Avoid considering two different unsaved tasks (id==0) as equal
+            return false;
+        }
+        return this.id == t.id;
     }
 
-    /** {@inheritDoc} */
+    /**
+     * Hash code:
+     * - Positive id → hash by id.
+     * - Unsaved (id==0) → identity-based hash to avoid collisions between new tasks.
+     */
     @Override
     public int hashCode() {
-        return Objects.hash(id);
+        return (id == 0) ? System.identityHashCode(this) : Objects.hash(id);
     }
 
-    /** {@inheritDoc} */
     @Override
     public String toString() {
-        return id + ":" + title + " [" + state + "]";
+        return (id == 0 ? "NEW" : String.valueOf(id)) + ":" + title + " [" + state + "]";
     }
 }
