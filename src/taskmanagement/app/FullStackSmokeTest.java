@@ -10,8 +10,11 @@ import taskmanagement.persistence.DAOProvider;
 import taskmanagement.persistence.ITasksDAO;
 import taskmanagement.persistence.TasksDAOException;
 
-import java.lang.reflect.*;
-import java.util.*;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
 import java.util.function.Predicate;
 
 /**
@@ -23,7 +26,7 @@ import java.util.function.Predicate;
  * 4)   Derby DAO CRUD end-to-end
  * 5)   Combinator filters + Visitor report (with adapters if present)
  * 6)   State + Command (undo/redo) + Strategy sorting (+ Observer if present)
- * <p>
+ *
  * Notes:
  * - Some Step 5/6 extras are attempted via reflection to avoid compile break if APIs differ.
  * - Optional parts print SKIPPED instead of failing the suite.
@@ -61,16 +64,27 @@ public final class FullStackSmokeTest {
         if (!cond) throw new AssertionError(msg);
     }
 
+    /**
+     * Expect the runnable to throw an exception of the requested type.
+     * This version safely unwraps RuntimeException wrappers and checks the root cause.
+     */
     private static <T extends Throwable> void expectThrows(Class<T> type, Runnable r, String failMsg) {
         try {
             r.run();
             throw new AssertionError(failMsg);
         } catch (Throwable t) {
-            if (!type.isInstance(t)) {
+            Throwable root = rootCause(t);
+            if (!type.isInstance(root)) {
                 t.printStackTrace();
-                throw new AssertionError("Expected " + type.getSimpleName() + " but got " + t.getClass().getSimpleName());
+                throw new AssertionError("Expected " + type.getSimpleName() + " but got " + root.getClass().getSimpleName());
             }
         }
+    }
+
+    private static Throwable rootCause(Throwable t) {
+        Throwable cur = t;
+        while (cur.getCause() != null) cur = cur.getCause();
+        return cur;
     }
 
     private static String state(ITask t) { return t.getState().name(); }
@@ -102,7 +116,7 @@ public final class FullStackSmokeTest {
         assertTrue(ok.getId() == 101, "id mismatch");
         assertTrue("A".equals(ok.getTitle()), "title mismatch");
 
-        // Invalid title (empty)
+        // Invalid title (empty) — allow model to throw ValidationException (unwrapped by expectThrows)
         expectThrows(ValidationException.class,
                 () -> {
                     try {
@@ -153,7 +167,11 @@ public final class FullStackSmokeTest {
         // delete
         dao.deleteTask(3);
         expectThrows(TasksDAOException.class, () -> {
-            try { dao.getTask(3); } catch (Exception e) { throw e; }
+            try {
+                dao.getTask(3);
+            } catch (TasksDAOException e) {
+                throw new RuntimeException(e);
+            }
         }, "Expecting TasksDAOException for missing id=3");
 
         System.out.println("  ✔ DAO CRUD passed");

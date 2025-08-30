@@ -15,8 +15,16 @@ public final class ByStateCount implements Report {
     private int inProgress;
     private int completed;
 
+    /** Default constructor (all zero). */
     public ByStateCount() {
         // all zero by default
+    }
+
+    /** Convenience constructor for direct assignment. */
+    public ByStateCount(int todo, int inProgress, int completed) {
+        this.todo = todo;
+        this.inProgress = inProgress;
+        this.completed = completed;
     }
 
     /** Increment the counter for a given state. */
@@ -53,6 +61,8 @@ public final class ByStateCount implements Report {
 
     @Override
     public String toString() {
-        return "ByStateCount{ToDo=" + todo + ", InProgress=" + inProgress + ", Completed=" + completed + '}';
+        return "ByStateCount{ToDo=" + todo +
+                ", InProgress=" + inProgress +
+                ", Completed=" + completed + '}';
     }
 }
