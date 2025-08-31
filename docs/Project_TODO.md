@@ -1,9 +1,7 @@
-# Project TODO — Tasks Management Application (Java, MVVM, Derby, Swing + FlatLaf)
+# Project TODO — Tasks Management Application (Java, MVVM, Derby, Swing)
 
-> Scope: Build a stand-alone desktop app in Java 24 using Swing (with FlatLaf), strict MVVM, DAO with embedded Apache Derby, and the required design patterns.  
+> Scope: Build a stand-alone desktop app in Java 24 using Swing, strict MVVM, DAO with embedded Apache Derby, and the required design patterns.
 > Deliver executable JAR, ZIP, and PDF per course rules.
-
----
 
 Legend
 - ☐ = To do
@@ -16,75 +14,85 @@ Legend
 
 ✅ Completed
 - ☑ Repo initialized & pushed
-- ☑ Task + ValidationException implemented
-- ☑ Combinator Filters (TaskFilter + Filters)
-- ☑ Visitor + Adapters (ByStateCount, CountByStateVisitor, PlainText/CSV exporters)
-- ☑ DAO layer: EmbeddedDerbyTasksDAO (Singleton), DerbyBootstrap, DerbyConfig, DAOProvider
-- ☑ FullStackSmokeTest passed (CRUD, filters, visitor, exporters, State, Command, Strategy, Observer scaffolding)
-
-Re-check:  
-Requirements.md — “Mandatory Design Patterns (Combinator, Visitor)”, “Architecture & Technologies”, “Interfaces to Implement”  
-Style Guide — “Comments (Javadoc)”, “Identifiers”, “Classes”, “Exception Handling”, “Separation of Concerns”
-
----
-
-🔜 Remaining Work (now → submission)
-
-## Step 6 — Additional Patterns (finalize)
-- ☑ Observer — ViewModel raises events; UI listens and updates automatically.
-- ☑ State — TaskState lifecycle with transitions enforced.
-- ☑ Command — Add/Update/Delete/MarkState commands with CommandStack (undo/redo).
-- ☑ Strategy — SortStrategy (by title, state) verified in tests.
-- ☐ Commit: feat(patterns): finalize Observer-UI hooks + verify undo/redo & sorting stability
-
-Acceptance: Undo/redo works; sort strategies change order; invalid transitions blocked.  
-Tests: CommandStack push/pop, redo cleanup, strategy ordering stable.
-
-Re-check:  
-Requirements.md — “Additional Design Patterns”  
-Style Guide — “Separation of Concerns”, “Classes”, “Identifiers”
+- ☑ Domain: ITask, Task, TaskState (+ validation), project exceptions
+- ☑ Filters (Combinator): ITaskFilter + Filters (AND/OR)
+- ☑ Visitor: TaskVisitor + reports (ByStateCount) + exporters (Plain/CSV)
+- ☑ DAO: EmbeddedDerbyTasksDAO + DerbyBootstrap + DerbyConfig + DAOProvider
+- ☑ Patterns (mandatory + four):
+    - 🧩 Combinator, 🧩 Visitor
+    - 🧩 Observer (VM notifies; UI subscribes)
+    - 🧩 State (Task lifecycle)
+    - 🧩 Command (Add/Update/Delete/Mark + CommandStack: undo/redo)
+    - 🧩 Strategy (Sort by title/state)
+- ☑ Step 7 — ViewModel:
+    - Exposed observable lists/properties (tasks, selection, filters)
+    - Integrated Strategy + Command + Observer events
+    - Bridged DAO ↔ UI without UI code
+- ☑ Initial UI structure:
+    - MainFrame, TaskListPanel, FiltersPanel, TaskEditorDialog, AboutDialog
+    - Central UITheme for colors/typography/helpers
 
 ---
 
-## Step 7 — ViewModel
-- ☐ Complete TasksViewModel bridging DAO ↔ UI
-- ☐ Expose observable lists/properties for tasks, selection, filters
-- ☐ Integrate Command + Strategy + Observer firing
-- ☐ Commit: feat(viewmodel): TasksViewModel full bindings and events
+🚧 In Progress — Step 8: Swing View (Re-design & polish)
+- ☐ MainFrame:
+    - Wire menu/actions: New, Edit, Delete, Undo, Redo, Report, Exit
+    - Hook strategy chooser (Strategy) + toolbar shortcuts
+    - Ensure EDT usage for all UI updates
+- ☐ TaskListPanel:
+    - Bind to ViewModel observable list; stable selection after refresh
+    - Double-click → Edit; Delete key → delete; Enter → edit
+    - Empty-state message when list is empty
+- ☐ FiltersPanel:
+    - Title contains + state filter; AND/OR combinators (Combinator)
+    - “Clear filters” and live apply on change
+- ☐ TaskEditorDialog:
+    - Add/Edit flows; show ValidationException messages inline
+    - OK/Cancel keyboard shortcuts; default button; focus handling
+- ☐ Reporting (Visitor):
+    - Trigger ByState report → choose exporter (Plain/CSV) → save dialog
+- ☐ Theming & layout:
+    - Apply UITheme consistently (paddings, gaps, titles, rounded borders)
+    - Table renderers for state pills; consistent spacing; icons (optional)
+- ☐ QA pass:
+    - Add/Delete/Edit reflect immediately; no flicker; no EDT violations
 
 ---
 
-## Step 8 — Swing View (UI)
-- ☐ MainFrame: menu (New, Edit, Delete, Undo, Redo, Report), strategy chooser, FlatLaf setup
-- ☐ TaskListPanel: JTable bound to ViewModel.ObservableList
-- ☐ FiltersPanel: controls for Combinator filters (AND/OR)
-- ☐ TaskEditorDialog: form for add/edit with ValidationException error display
-- ☐ Ensure updates occur on EDT only
-- ☐ Commit: feat(ui): Swing GUI with MVVM binding
+🧪 Step 9 — Unit Tests
+- ☐ DAO edge cases (missing id, empty DB)
+- ☐ Filters AND/OR combinations + empty results
+- ☐ Visitor outputs (counts per state; CSV/Plain UTF-8)
+- ☐ Command: multi-step undo/redo, redo-chain invalidation after new command
+- ☐ Strategy: stable ordering; switching strategies reflects in UI list
+- ☐ Observer: events propagate; UI list updates once per change (no duplicates)
 
 ---
 
-## Step 9 — Unit Tests
-- ☐ DAO: edge cases (non-existent id, empty DB)
-- ☐ Filters: AND/OR edge cases, empty result
-- ☐ Visitor: report correctness, UTF-8 CSV/Plain
-- ☐ Commands: undo/redo chains, redo cleanup
-- ☐ Strategies: stable ordering
-- ☐ Observer: events firing reflected in UI lists
-- ☐ Commit: test: add unit tests for DAO, filters, visitor, patterns
+📦 Step 10 — Build Deliverables
+- ☐ IntelliJ Artifacts → executable JAR (main class set, Derby on classpath)
+- ☐ Export project ZIP (File → Export → Project to Zip)
+- ☐ Single PDF:
+    - Team details
+    - Unlisted YouTube link (demo)
+    - ≤50-word explanation per pattern + class names
+    - All code left-aligned (no broken lines)
+- ☐ File names: firstname_lastname.jar / .zip / .pdf
 
 ---
 
-## Step 10 — Build Deliverables
-- ☐ Configure IntelliJ artifacts → executable JAR (main class set)
-- ☐ Export project ZIP from IntelliJ
-- ☐ Generate PDF: team details, YouTube link, ≤50 words explanations per pattern (with class names), all code left-aligned
-- ☐ File naming: firstname_lastname.jar / .zip / .pdf
+🔖 Nice-to-have (time-boxed)
+- ☐ Keyboard shortcuts (Ctrl+N/E/D/Z/Y, Ctrl+F)
+- ☐ Status bar with counts (total / per state)
+- ☐ Minimal icons for actions (no external libs)
 
 ---
 
-📦 Final Submission
-- Executable JAR launches with DB
-- ZIP exported from IntelliJ
-- PDF complete with code, pattern explanations, video link
-- Team manager submits only
+Next commits
+- feat(ui): finalize MainFrame actions + strategy switcher + EDT guards
+- feat(ui): bind TaskListPanel selection & shortcuts; empty-state
+- feat(ui): FiltersPanel AND/OR wiring; clear filters
+- feat(ui): TaskEditorDialog validation UX
+- feat(report): Visitor report export flow (Plain/CSV)
+- chore: polish UITheme usage across panels
+
