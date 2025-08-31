@@ -2,6 +2,10 @@ package taskmanagement.domain;
 
 import taskmanagement.domain.exceptions.ValidationException;
 import taskmanagement.domain.visitor.TaskVisitor;
+// ⬇️ ייבוא הרקורדים ל-Visitor (ייצוא/דוחות)
+import taskmanagement.domain.visitor.export.CompletedTaskRec;
+import taskmanagement.domain.visitor.export.InProgressTaskRec;
+import taskmanagement.domain.visitor.export.ToDoTaskRec;
 
 import java.util.Objects;
 
@@ -54,10 +58,16 @@ public class Task implements ITask {
 
     /**
      * Accepts a visitor (Visitor pattern).
+     * Maps this Task to a record by state and dispatches to the visitor.
      */
     @Override
     public void accept(TaskVisitor visitor) {
-        visitor.visit(this);
+        // Pattern matching by TaskState via distinct record variants:
+        switch (getState()) {
+            case ToDo -> visitor.visit(new ToDoTaskRec(getId(), getTitle(), getDescription()));
+            case InProgress -> visitor.visit(new InProgressTaskRec(getId(), getTitle(), getDescription()));
+            case Completed -> visitor.visit(new CompletedTaskRec(getId(), getTitle(), getDescription()));
+        }
     }
 
     // ------------ validation setters ------------

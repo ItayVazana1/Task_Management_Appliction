@@ -29,6 +29,9 @@ public final class MainFrame extends JFrame {
     private final FiltersPanel filters;
     private final TaskListPanel list;
 
+    // Top bar with export button
+    private JButton exportButton;
+
     // Client-side filtering & sorting (UI-level)
     private String titleContains = "";
     private TaskState stateEquals = null;
@@ -55,7 +58,7 @@ public final class MainFrame extends JFrame {
         this.list = new TaskListPanel(this::onAdd, this::onEdit, this::onDelete, this::onMarkState);
 
         setJMenuBar(buildMenuBar());
-        add(filters.getComponent(), BorderLayout.NORTH);
+        add(buildTopBar(), BorderLayout.NORTH);
         add(list.getComponent(), BorderLayout.CENTER);
 
         // First load
@@ -64,16 +67,41 @@ public final class MainFrame extends JFrame {
         pack();
     }
 
+    // ===== Top Bar (filters + Export button) =====
+
+    private JComponent buildTopBar() {
+        final var top = new JPanel(new BorderLayout());
+        top.add(filters.getComponent(), BorderLayout.CENTER);
+
+        exportButton = new JButton("Export…");
+        exportButton.addActionListener(e -> openExportDialog());
+        final var right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 8));
+        right.add(exportButton);
+
+        top.add(right, BorderLayout.EAST);
+        return top;
+    }
+
     // ===== Menu =====
 
     private JMenuBar buildMenuBar() {
         JMenuBar mb = new JMenuBar();
 
         JMenu file = new JMenu("File");
+
+        JMenuItem export = new JMenuItem("Export…");
+        export.setMnemonic('E');
+        export.setToolTipText("Export tasks to CSV/TXT");
+        export.addActionListener(e -> openExportDialog());
+
         JMenuItem refresh = new JMenuItem("Refresh");
         refresh.addActionListener(e -> safeRun(this::reloadFromVM));
+
         JMenuItem exit = new JMenuItem("Exit");
         exit.addActionListener(e -> dispose());
+
+        file.add(export);
+        file.addSeparator();
         file.add(refresh);
         file.addSeparator();
         file.add(exit);
@@ -86,6 +114,13 @@ public final class MainFrame extends JFrame {
         mb.add(file);
         mb.add(help);
         return mb;
+    }
+
+    /** Opens the Export dialog (MVVM: dialog talks to ViewModel only). */
+    private void openExportDialog() {
+        // Assumes ExportDialog is in the same package: taskmanagement.ui.views.ExportDialog
+        final var dlg = new ExportDialog(this, vm);
+        dlg.setVisible(true);
     }
 
     // ===== Actions from FiltersPanel =====

@@ -1,16 +1,36 @@
 package taskmanagement.domain.visitor;
 
-import taskmanagement.domain.ITask;
+import taskmanagement.domain.visitor.export.ToDoTaskRec;
+import taskmanagement.domain.visitor.export.InProgressTaskRec;
+import taskmanagement.domain.visitor.export.CompletedTaskRec;
 
 /**
- * Visitor for processing tasks (e.g., reporting).
- * <p>Kept minimal for now; can be extended alongside record-based reports later.</p>
+ * Base visitor over task export record variants.
+ * Each visit method handles a specific record (pattern-matching by type).
  */
-@FunctionalInterface
 public interface ITaskVisitor {
+
     /**
-     * Visit a single task.
-     * @param task the task to visit
+     * Visit a To-Do task record node.
+     * @param node record representing a To-Do task snapshot
      */
-    void visit(ITask task);
+    void visit(ToDoTaskRec node);
+
+    /**
+     * Visit an In-Progress task record node.
+     * @param node record representing an In-Progress task snapshot
+     */
+    void visit(InProgressTaskRec node);
+
+    /**
+     * Visit a Completed task record node.
+     * @param node record representing a Completed task snapshot
+     */
+    void visit(CompletedTaskRec node);
+
+    /**
+     * Optional hook invoked after a batch traversal.
+     * Implementations may no-op.
+     */
+    default void complete() { }
 }

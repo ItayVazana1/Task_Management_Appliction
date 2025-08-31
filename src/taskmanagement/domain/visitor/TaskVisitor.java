@@ -1,8 +1,10 @@
 package taskmanagement.domain.visitor;
 
 /**
- * Alias interface to match the name required in the spec.
- * Keeps backward compatibility by extending the internal ITaskVisitor.
+ * Visitor interface required by the project (see Requirements.md).
+ * Extends {@link ITaskVisitor} so {@code ITask.accept(TaskVisitor)} works
+ * while keeping a single set of visit methods.
  */
 public interface TaskVisitor extends ITaskVisitor {
+    // No extra members; this type exists to match the required signature.
 }

@@ -2,12 +2,14 @@ package taskmanagement.domain.visitor;
 
 import taskmanagement.domain.ITask;
 import taskmanagement.domain.TaskState;
+import taskmanagement.domain.visitor.export.CompletedTaskRec;
+import taskmanagement.domain.visitor.export.InProgressTaskRec;
+import taskmanagement.domain.visitor.export.ToDoTaskRec;
 import taskmanagement.domain.visitor.reports.ByStateCount;
 
 /**
  * Visitor that counts tasks by state and returns a ByStateCount report.
- * - Never returns null (even with 0 tasks).
- * - Exposes multiple accessors (result/report/getReport) for compatibility.
+ * Implements record-based visits (Visitor + Records + Pattern Matching).
  */
 public final class CountByStateVisitor implements TaskVisitor {
 
@@ -20,17 +22,46 @@ public final class CountByStateVisitor implements TaskVisitor {
         todo = inProgress = completed = 0;
     }
 
-    @Override
+    /** Convenience bridge: allow old-style calls by delegating to accept(this). */
     public void visit(ITask task) {
-        TaskState s = task.getState();
-        if (s == TaskState.ToDo) {
-            todo++;
-        } else if (s == TaskState.InProgress) {
-            inProgress++;
-        } else if (s == TaskState.Completed) {
-            completed++;
+        if (task != null) {
+            task.accept(this); // this triggers the record-specific visit(...)
         }
     }
+
+    /** Optional convenience: count directly from TaskState (useful in ViewModel if needed). */
+    public void visit(TaskState s) {
+        if (s == null) return;
+        switch (s) {
+            case ToDo -> todo++;
+            case InProgress -> inProgress++;
+            case Completed -> completed++;
+        }
+    }
+
+    // ===== Record-based visits (required by TaskVisitor) =====
+
+    @Override
+    public void visit(ToDoTaskRec node) {
+        todo++;
+    }
+
+    @Override
+    public void visit(InProgressTaskRec node) {
+        inProgress++;
+    }
+
+    @Override
+    public void visit(CompletedTaskRec node) {
+        completed++;
+    }
+
+    @Override
+    public void complete() {
+        // no-op (hook for future use)
+    }
+
+    // ===== Report accessors =====
 
     /** Primary accessor used by reports/adapters. */
     public ByStateCount result() {
