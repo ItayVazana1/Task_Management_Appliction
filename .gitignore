@@ -1,17 +1,23 @@
 # IntelliJ IDEA
 .idea/
 *.iml
-out/
-# Build artifacts
-/build/
-/dist/
-/target/
+
+# Build outputs
+/out/
+build/
+dist/
+target/
+
 # OS files
 .DS_Store
 Thumbs.db
-# Compiled classes
-*.class
-# Local data
-tasksdb/
-# helper scripts
+
+# Local Derby database files
+/tasksdb/
+tasksdb/**
+
+# Helper scripts
 DumpTree.py
+
+# DB logs
+derby.log
