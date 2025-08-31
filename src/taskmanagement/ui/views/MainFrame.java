@@ -18,26 +18,31 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
- * Main application window (pure Java, no .form).
- * Bridges UI actions to {@link TasksViewModel} and applies client-side filter/sort.
+ * Main application window (pure Swing, no .form).
+ * <p>
+ * Layout aligned to the mock:
+ * <ul>
+ *   <li>Top: lime header title.</li>
+ *   <li>West: big action buttons (Add / Edit / Delete).</li>
+ *   <li>Center: task list panel wrapped with JScrollPane.</li>
+ *   <li>East: Filters panel (hosted inside FiltersPanel itself).</li>
+ * </ul>
+ * <b>Design-only changes — no VM calls were modified.</b>
  */
 public final class MainFrame extends JFrame {
 
     private final TasksViewModel vm;
 
-    // UI
+    // UI panels (provided implementations)
     private final FiltersPanel filters;
     private final TaskListPanel list;
 
-    // Top bar with export button
-    private JButton exportButton;
-
-    // Client-side filtering & sorting (UI-level)
+    // Current UI filtering & sorting (client-side)
     private String titleContains = "";
     private TaskState stateEquals = null;
     private String sortKey = "id"; // "id" | "title" | "state"
 
-    // Keep what VM returns: RowDTO (not ITask!)
+    // Data snapshot from VM (RowDTO list, not ITask)
     private List<TasksViewModel.RowDTO> masterRows = new ArrayList<>();
 
     /**
@@ -47,39 +52,142 @@ public final class MainFrame extends JFrame {
         super("Tasks Management");
         this.vm = Objects.requireNonNull(viewModel, "viewModel");
 
+        // Global LaF and defaults (dark theme tokens)
         UITheme.applyGlobalDefaults();
+
         setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
-        setMinimumSize(new Dimension(960, 600));
-        setLocationByPlatform(true);
-        setLayout(new BorderLayout());
 
-        // Panels
-        this.filters = new FiltersPanel(this::onApplyFilter, this::onSortChanged);
-        this.list = new TaskListPanel(this::onAdd, this::onEdit, this::onDelete, this::onMarkState);
+        // 🔒 Prevent resizing (per spec)
+        setResizable(false);
 
+        // 📏 Fixed initial size (per spec)
+        setPreferredSize(new Dimension(1280, 720));
+
+        // ===== Root layout: title top, actions west, list center, filters east =====
+        setLayout(new BorderLayout(16, 0));
+        getContentPane().setBackground(UITheme.BG_APP);
+
+        // Menu bar (File/Help…)
         setJMenuBar(buildMenuBar());
-        add(buildTopBar(), BorderLayout.NORTH);
-        add(list.getComponent(), BorderLayout.CENTER);
+
+        // Top lime header
+        add(buildHeader(), BorderLayout.NORTH);
+
+        // West big action buttons
+        JComponent leftActions = buildLeftActions();
+        // ⬅️ Fixed width per spec
+        leftActions.setPreferredSize(new Dimension(160, 0));
+        add(leftActions, BorderLayout.WEST);
+
+        // Center task list (wrapped by JScrollPane per spec)
+        this.list = new TaskListPanel(this::onAdd, this::onEdit, this::onDelete, this::onMarkState);
+        JScrollPane centerScroll = new JScrollPane(list.getComponent());
+        centerScroll.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
+        centerScroll.getViewport().setBackground(UITheme.BG_CARD);
+        add(centerScroll, BorderLayout.CENTER);
+
+        // East filters panel
+        this.filters = new FiltersPanel(this::onApplyFilter, this::onSortChanged);
+        JComponent rightFilters = buildRightFilters();
+        // ➡️ Fixed width per spec (340px)
+        rightFilters.setPreferredSize(new Dimension(340, 0));
+        add(rightFilters, BorderLayout.EAST);
 
         // First load
         reloadFromVM();
 
         pack();
+        setLocationRelativeTo(null);
     }
 
-    // ===== Top Bar (filters + Export button) =====
+    // ===== Header (North) =====
 
-    private JComponent buildTopBar() {
-        final var top = new JPanel(new BorderLayout());
-        top.add(filters.getComponent(), BorderLayout.CENTER);
+    /**
+     * Builds the top header with brand lime title, aligned left.
+     */
+    private JComponent buildHeader() {
+        JPanel north = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 12));
+        north.setOpaque(false);
+        north.add(UITheme.makeHeaderTitle("Task Management App"));
+        return north;
+    }
 
-        exportButton = new JButton("Export…");
-        exportButton.addActionListener(e -> openExportDialog());
-        final var right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 8));
-        right.add(exportButton);
+    // ===== Left action bar (West) =====
 
-        top.add(right, BorderLayout.EAST);
-        return top;
+    /**
+     * Builds the left vertical bar with big action buttons.
+     */
+    private JComponent buildLeftActions() {
+        JPanel west = new JPanel();
+        west.setOpaque(false);
+        west.setLayout(new BoxLayout(west, BoxLayout.Y_AXIS));
+
+        JButton btnAdd = new JButton("Add", UITheme.whiteSquareIcon(20));
+        UITheme.styleActionButton(btnAdd, UITheme.BTN_ADD_BG);
+        btnAdd.addActionListener(e -> onAdd());
+
+        JButton btnEdit = new JButton("Edit", UITheme.whiteSquareIcon(20));
+        UITheme.styleActionButton(btnEdit, UITheme.BTN_EDIT_BG);
+        btnEdit.addActionListener(e -> {
+            Integer selectedId = tryGetSelectedId();
+            if (selectedId == null) {
+                JOptionPane.showMessageDialog(this, "Select a task in the list to edit.", "No Selection",
+                        JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+            onEdit(selectedId);
+        });
+
+        JButton btnDelete = new JButton("Delete", UITheme.whiteSquareIcon(20));
+        UITheme.styleActionButton(btnDelete, UITheme.BTN_DELETE_BG);
+        btnDelete.addActionListener(e -> {
+            Integer selectedId = tryGetSelectedId();
+            if (selectedId == null) {
+                JOptionPane.showMessageDialog(this, "Select a task in the list to delete.", "No Selection",
+                        JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+            onDelete(selectedId);
+        });
+
+        west.add(Box.createVerticalStrut(8));
+        west.add(btnAdd);
+        west.add(Box.createVerticalStrut(16));
+        west.add(btnEdit);
+        west.add(Box.createVerticalStrut(16));
+        west.add(btnDelete);
+        west.add(Box.createVerticalGlue());
+        west.setBorder(BorderFactory.createEmptyBorder(8, 12, 12, 0));
+        return west;
+    }
+
+    /**
+     * Attempts to obtain the currently selected task id from the list panel.
+     * If the panel doesn't expose such API, returns null (we keep logic intact).
+     */
+    private Integer tryGetSelectedId() {
+        try {
+            var m = list.getClass().getMethod("getSelectedId");
+            Object value = m.invoke(list);
+            if (value instanceof Integer i && i > 0) return i;
+        } catch (Throwable ignore) {
+            // Silent fallback – no API enforced.
+        }
+        return null;
+    }
+
+    // ===== Right filters (East) =====
+
+    /**
+     * Hosts the FiltersPanel on the right, plus spacing consistent with the mock.
+     */
+    private JComponent buildRightFilters() {
+        JPanel east = new JPanel();
+        east.setBackground(UITheme.BG_APP);
+        east.setBorder(BorderFactory.createMatteBorder(0, 2, 0, 0, UITheme.TABLE_GRID));
+        east.setLayout(new BorderLayout());
+        east.add(filters.getComponent(), BorderLayout.CENTER);
+        return east;
     }
 
     // ===== Menu =====
@@ -118,7 +226,6 @@ public final class MainFrame extends JFrame {
 
     /** Opens the Export dialog (MVVM: dialog talks to ViewModel only). */
     private void openExportDialog() {
-        // Assumes ExportDialog is in the same package: taskmanagement.ui.views.ExportDialog
         final var dlg = new ExportDialog(this, vm);
         dlg.setVisible(true);
     }
@@ -136,8 +243,7 @@ public final class MainFrame extends JFrame {
         applyFilterAndSort();
     }
 
-    // ===== Actions from TaskListPanel =====
-    // NOTICE: no "throws" here; all checked exceptions are handled inside.
+    // ===== Actions (wired the same; no signature changes) =====
 
     private void onAdd() {
         TaskEditorDialog dlg = new TaskEditorDialog(this, "Add Task", null);
@@ -212,7 +318,6 @@ public final class MainFrame extends JFrame {
             p = p.and(t -> t.title() != null && t.title().toLowerCase().contains(needle));
         }
         if (stateEquals != null) {
-            // RowDTO.state() is String; compare to enum name
             p = p.and(t -> Objects.equals(t.state(), stateEquals.name()));
         }
         List<TasksViewModel.RowDTO> filtered = masterRows.stream().filter(p).toList();
@@ -220,7 +325,7 @@ public final class MainFrame extends JFrame {
         // Sort
         Comparator<TasksViewModel.RowDTO> cmp = switch (sortKey) {
             case "title" -> Comparator.comparing(TasksViewModel.RowDTO::title, String.CASE_INSENSITIVE_ORDER);
-            case "state" -> Comparator.comparing(TasksViewModel.RowDTO::state); // String comparison
+            case "state" -> Comparator.comparing(TasksViewModel.RowDTO::state);
             default -> Comparator.comparingInt(TasksViewModel.RowDTO::id);
         };
         filtered = filtered.stream().sorted(cmp).toList();

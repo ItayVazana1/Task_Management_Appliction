@@ -1,4 +1,4 @@
-Generated: 2025-08-31 18:27:55 (local)
+Generated: 2025-08-31 21:58:32 (local)
 
 Task_Management_Appliction/
 ├── .gitignore [OK]
@@ -19,6 +19,7 @@ Task_Management_Appliction/
 │   ├── Another_Task_added_again.PNG [OK]
 │   ├── Change_task_state_to_iprogress.PNG [OK]
 │   ├── Delete_The_first_task.PNG [OK]
+│   ├── Export_tasks.PNG [OK]
 │   ├── Task_added.PNG [OK]
 │   ├── Use_The_Filter.PNG [OK]
 │   └── main_view_empty.PNG [OK]
@@ -28,6 +29,7 @@ Task_Management_Appliction/
         │   └── App.java [OK]
         ├── application/
         │   └── viewmodel/
+        │       ├── ExportFormat.java [OK]
         │       ├── TasksViewModel.java [OK]
         │       ├── commands/
         │       │   ├── AddTaskCommand.java [OK]
@@ -60,6 +62,13 @@ Task_Management_Appliction/
         │       │   ├── ByStateCsvExporter.java [OK]
         │       │   ├── ByStatePlainTextExporter.java [OK]
         │       │   └── IReportExporter.java [OK]
+        │       ├── export/
+        │       │   ├── CompletedTaskRec.java [OK]
+        │       │   ├── CsvFlatTaskVisitor.java [OK]
+        │       │   ├── ExportNode.java [OK]
+        │       │   ├── InProgressTaskRec.java [OK]
+        │       │   ├── PlainTextFlatTaskVisitor.java [OK]
+        │       │   └── ToDoTaskRec.java [OK]
         │       └── reports/
         │           ├── ByStateCount.java [OK]
         │           └── Report.java [OK]
@@ -71,14 +80,13 @@ Task_Management_Appliction/
         │       ├── DerbyBootstrap.java [OK]
         │       ├── DerbyConfig.java [OK]
         │       └── EmbeddedDerbyTasksDAO.java [OK]
-        ├── ui/
-        │   ├── UITheme.java [OK]
-        │   └── views/
-        │       ├── AboutDialog.java [OK]
-        │       ├── MainFrame.java [OK]
-        │       └── panels/
-        │           ├── FiltersPanel.java [OK]
-        │           ├── TaskEditorDialog.java [OK]
-        │           └── TaskListPanel.java [OK]
-        └── util/
-            └── Strings.java [EMPTY]
+        └── ui/
+            ├── UITheme.java [OK]
+            └── views/
+                ├── AboutDialog.java [OK]
+                ├── ExportDialog.java [OK]
+                ├── MainFrame.java [OK]
+                └── panels/
+                    ├── FiltersPanel.java [OK]
+                    ├── TaskEditorDialog.java [OK]
+                    └── TaskListPanel.java [OK]

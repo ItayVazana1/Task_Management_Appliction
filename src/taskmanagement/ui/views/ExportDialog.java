@@ -2,6 +2,7 @@ package taskmanagement.ui.views;
 
 import taskmanagement.application.viewmodel.ExportFormat;
 import taskmanagement.application.viewmodel.TasksViewModel;
+import taskmanagement.ui.UITheme;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -14,7 +15,7 @@ import java.util.Objects;
 
 /**
  * Modal dialog for exporting tasks to CSV/TXT.
- * MVVM: talks only to TasksViewModel (no model/DAO here).
+ * MVVM: talks only to {@link TasksViewModel} (no model/DAO here).
  */
 public final class ExportDialog extends JDialog {
 
@@ -22,24 +23,30 @@ public final class ExportDialog extends JDialog {
 
     private final JTextField pathField = new JTextField(28);
     private final JButton browseBtn = new JButton("Browse…");
-    private final JButton exportBtn = new JButton("Export");
-    private final JButton cancelBtn = new JButton("Cancel");
 
     private final JRadioButton csvRadio = new JRadioButton("CSV", true);
     private final JRadioButton txtRadio = new JRadioButton("TXT");
 
+    private final JButton exportBtn =
+            UITheme.makeFilledButton("Export", UITheme.BTN_EXPORT_BG, Color.BLACK);
+    private final JButton cancelBtn =
+            UITheme.makeFilledButton("Cancel", UITheme.BTN_RESET_BG, Color.WHITE);
+
     /**
      * Creates the export dialog.
      * @param owner parent window
-     * @param vm view model to invoke export on
+     * @param vm    view model to invoke export on
      */
     public ExportDialog(Window owner, TasksViewModel vm) {
         super(owner, "Export Tasks", ModalityType.APPLICATION_MODAL);
         this.vm = Objects.requireNonNull(vm, "vm");
 
+        UITheme.applyGlobalDefaults();
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+
         setContentPane(buildUI());
         pack();
+        setMinimumSize(new Dimension(Math.max(520, getWidth()), Math.max(240, getHeight())));
         setLocationRelativeTo(owner);
 
         // Wire actions
@@ -51,38 +58,45 @@ public final class ExportDialog extends JDialog {
     private JPanel buildUI() {
         final JPanel root = new JPanel(new BorderLayout(12, 12));
         root.setBorder(new EmptyBorder(12, 12, 12, 12));
+        root.setBackground(UITheme.BG_CARD);
 
         // Path row
-        final JPanel pathRow = new JPanel(new BorderLayout(6, 6));
-        pathRow.add(new JLabel("Output file:"), BorderLayout.WEST);
+        final JPanel pathRow = new JPanel(new BorderLayout(8, 8));
+        pathRow.setOpaque(false);
+        JLabel lblOut = UITheme.makeSectionLabel("Output file:");
+        pathRow.add(lblOut, BorderLayout.WEST);
+
+        UITheme.styleInput(pathField);
         pathRow.add(pathField, BorderLayout.CENTER);
+
+        // Browse button (kept as classic button for file chooser affordance)
+        browseBtn.setFocusPainted(false);
         pathRow.add(browseBtn, BorderLayout.EAST);
 
         // Format group
         final JPanel fmtPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
+        fmtPanel.setOpaque(false);
         final ButtonGroup fmtGroup = new ButtonGroup();
         fmtGroup.add(csvRadio);
         fmtGroup.add(txtRadio);
-        fmtPanel.add(new JLabel("Format:"));
+        JLabel lblFmt = UITheme.makeSectionLabel("Format:");
+        fmtPanel.add(lblFmt);
         fmtPanel.add(csvRadio);
         fmtPanel.add(txtRadio);
 
-        // Scope group
-        final JPanel scopePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
-
-
-        // Buttons
-        final JPanel btns = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        // Buttons row
+        final JPanel btns = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        btns.setOpaque(false);
         btns.add(cancelBtn);
         btns.add(exportBtn);
 
+        // Center stack
         final JPanel center = new JPanel();
+        center.setOpaque(false);
         center.setLayout(new BoxLayout(center, BoxLayout.Y_AXIS));
         center.add(pathRow);
-        center.add(Box.createVerticalStrut(8));
+        center.add(Box.createVerticalStrut(10));
         center.add(fmtPanel);
-        center.add(Box.createVerticalStrut(8));
-        center.add(scopePanel);
 
         root.add(center, BorderLayout.CENTER);
         root.add(btns, BorderLayout.SOUTH);
