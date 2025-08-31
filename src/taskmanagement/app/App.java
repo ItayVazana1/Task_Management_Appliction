@@ -1,45 +1,49 @@
 package taskmanagement.app;
 
-import com.formdev.flatlaf.FlatLightLaf;
 import taskmanagement.application.viewmodel.TasksViewModel;
 import taskmanagement.persistence.DAOProvider;
 import taskmanagement.persistence.ITasksDAO;
-import taskmanagement.ui.MainFrame;
+import taskmanagement.ui.views.MainFrame;
 
 import javax.swing.*;
 
 /**
- * Application entry point. Initializes Look & Feel, wires ViewModel to the UI,
- * and ensures everything runs on the Event Dispatch Thread (EDT).
+ * Application bootstrap class.
+ * <p>
+ * Responsibilities:
+ * <ul>
+ *   <li>Acquire the DAO instance using {@link DAOProvider}.</li>
+ *   <li>Construct the {@link TasksViewModel} with the DAO.</li>
+ *   <li>Launch the Swing {@link MainFrame} on the EDT.</li>
+ * </ul>
+ *
+ * <h2>MVVM Note</h2>
+ * App builds the dependency graph (DAO → ViewModel → View).
+ * No model logic is placed here.
  */
 public final class App {
 
     private App() {
-        // Utility class – prevent instantiation
+        // Utility class: not instantiable
     }
 
     /**
-     * Main entry point. Always schedules UI creation on the EDT.
-     * @param args command-line arguments (unused)
+     * Entry point. Starts the UI on the Event Dispatch Thread.
+     *
+     * @param args CLI arguments (unused)
      */
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
             try {
-                // Setup FlatLaf Look & Feel
-                FlatLightLaf.setup();
-                UIManager.put("Component.hideMnemonics", Boolean.TRUE); // small UX tweak
-
-                // Wire DAO -> ViewModel -> UI
-                ITasksDAO dao = DAOProvider.get();
-                TasksViewModel viewModel = new TasksViewModel(dao);
-
-                MainFrame frame = new MainFrame(viewModel);
+                final ITasksDAO dao = DAOProvider.get();
+                final TasksViewModel vm = new TasksViewModel(dao);
+                final MainFrame frame = new MainFrame(vm);
                 frame.setVisible(true);
-            } catch (Throwable t) {
-                t.printStackTrace();
+            } catch (Exception ex) {
+                ex.printStackTrace();
                 JOptionPane.showMessageDialog(
                         null,
-                        t.getMessage(),
+                        ex.toString(),
                         "Startup Error",
                         JOptionPane.ERROR_MESSAGE
                 );

@@ -3,199 +3,187 @@ package taskmanagement.application.viewmodel;
 import taskmanagement.domain.ITask;
 import taskmanagement.domain.Task;
 import taskmanagement.domain.TaskState;
-import taskmanagement.domain.exceptions.ValidationException;
 import taskmanagement.persistence.ITasksDAO;
 import taskmanagement.persistence.TasksDAOException;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 
 /**
- * TasksViewModel
- * --------------
- * MVVM ViewModel that mediates between the DAO-backed model and Swing views.
- * Exposes read-only snapshots for UI tables and imperative commands to mutate
- * the task store. No Swing code is allowed here.
+ * MVVM ViewModel for the Tasks screen.
+ * <p>
+ * Responsibilities:
+ * <ul>
+ *   <li>Mediate between the UI and the DAO-backed model.</li>
+ *   <li>Expose read-only task snapshots suitable for the UI (no domain leakage).</li>
+ *   <li>Provide imperative commands for CRUD and state changes.</li>
+ *   <li>Enforce basic validation (null/empty checks) and call the DAO.</li>
+ * </ul>
+ *
+ * <h2>Notes</h2>
+ * - The UI never touches {@link ITask} or {@link Task} directly.
+ * - After each mutation, {@link #reload()} is called so the UI sees generated IDs and the latest state.
  */
 public final class TasksViewModel {
 
+    /** DAO dependency (model). */
     private final ITasksDAO dao;
 
-    // Cached lists for UI rendering (simple approach; could be replaced by ObservableList)
-    private List<ITask> all = new ArrayList<>();
-    private List<ITask> filtered = new ArrayList<>();
-
-    // Current filter criteria
-    private String titleContains = "";
-    private TaskState stateEquals = null;
+    /** Cached snapshot of tasks for UI consumption (latest reload). */
+    private List<ITask> snapshot = Collections.emptyList();
 
     /**
-     * Constructs a ViewModel bound to the provided DAO.
+     * Immutable UI row. Keeps the UI decoupled from domain types.
+     *
+     * @param id          task id
+     * @param title       title
+     * @param description description
+     * @param state       state as string (e.g., "ToDo")
+     */
+    public record RowDTO(int id, String title, String description, String state) { }
+
+    /**
+     * Constructs the ViewModel with a DAO instance.
+     *
      * @param dao tasks DAO (must not be null)
      */
     public TasksViewModel(ITasksDAO dao) {
-        this.dao = Objects.requireNonNull(dao, "dao is required");
-        reloadSafe();
+        this.dao = Objects.requireNonNull(dao, "ITasksDAO must not be null");
     }
 
-    // -------------------- Data loading & filtering --------------------
+    // =====================
+    // Query side (read)
+    // =====================
 
     /**
-     * Reload tasks from the DAO and re-apply current filters (swallows DAO errors).
+     * Reloads tasks from the DAO into an internal snapshot.
+     *
+     * @throws TasksDAOException if the DAO read fails
      */
-    private void reloadSafe() {
-        try {
-            ITask[] arr = dao.getTasks();
-            List<ITask> tmp = new ArrayList<>();
-            if (arr != null) {
-                Collections.addAll(tmp, arr);
-            }
-            this.all = List.copyOf(tmp);
-            reapplyFilters();
-        } catch (TasksDAOException e) {
-            // In MVVM we don't throw checked exceptions to the UI layer.
-            // Minimal handling here; you can later surface this via a status Property if you add one.
-            System.err.println("DAO error (getTasks): " + e.getMessage());
-            this.all = List.of();
-            this.filtered = List.of();
-        }
+    public void reload() throws TasksDAOException {
+        ITask[] arr = dao.getTasks();
+        this.snapshot = (arr == null) ? List.of() : Arrays.asList(arr);
     }
 
     /**
-     * Returns an immutable snapshot of the currently filtered tasks.
+     * Returns a UI-friendly snapshot of tasks.
+     * <p>
+     * Call {@link #reload()} before this if you want fresh data.
+     *
+     * @return immutable list of {@link RowDTO}
      */
-    public List<ITask> getTasksSnapshot() {
-        return List.copyOf(filtered);
+    public List<RowDTO> getRows() {
+        List<RowDTO> out = new ArrayList<>(snapshot.size());
+        for (ITask t : snapshot) {
+            out.add(new RowDTO(
+                    t.getId(),
+                    safe(t.getTitle()),
+                    safe(t.getDescription()),
+                    (t.getState() == null) ? "" : t.getState().name()
+            ));
+        }
+        return Collections.unmodifiableList(out);
+    }
+
+    // =====================
+    // Command side (write)
+    // =====================
+
+    /**
+     * Adds a new task.
+     *
+     * @param title       non-empty title
+     * @param description nullable/optional description
+     * @param state       non-null state
+     * @throws Exception wraps {@link TasksDAOException} or validation exceptions from the domain model
+     */
+    public void addTask(String title, String description, TaskState state) throws Exception {
+        validateTitle(title);
+        Objects.requireNonNull(state, "state must not be null");
+
+        // id=0 (or negative) indicates "not yet persisted"; DAO should assign a real id.
+        Task toAdd = new Task(0, title, description, state);
+        dao.addTask(toAdd);
+        reload();
     }
 
     /**
-     * Finds a task by id in the cached list or via DAO as a fallback.
+     * Updates an existing task by id.
+     *
+     * @param id          existing task id
+     * @param title       non-empty title
+     * @param description nullable/optional description
+     * @param state       non-null state
+     * @throws Exception wraps {@link TasksDAOException} or validation exceptions from the domain model
      */
-    public Optional<ITask> findTaskById(int id) {
-        for (ITask t : all) {
-            if (t.getId() == id) return Optional.of(t);
-        }
-        try {
-            return Optional.ofNullable(dao.getTask(id));
-        } catch (TasksDAOException e) {
-            System.err.println("DAO error (getTask): " + e.getMessage());
-            return Optional.empty();
-        }
-    }
+    public void updateTask(int id, String title, String description, TaskState state) throws Exception {
+        validateId(id);
+        validateTitle(title);
+        Objects.requireNonNull(state, "state must not be null");
 
-    // -------------------- Commands (no checked throws to UI) --------------------
-
-    /**
-     * Adds a task through the DAO and refreshes the cache.
-     */
-    public void addTask(ITask task) {
-        Objects.requireNonNull(task, "task is required");
-        try {
-            dao.addTask(task);
-        } catch (TasksDAOException e) {
-            System.err.println("DAO error (addTask): " + e.getMessage());
-        }
-        reloadSafe();
+        Task updated = new Task(id, title, description, state);
+        dao.updateTask(updated);
+        reload();
     }
 
     /**
-     * Updates a task through the DAO and refreshes the cache.
+     * Deletes a task by id.
+     *
+     * @param id existing task id
+     * @throws TasksDAOException if the DAO operation fails
      */
-    public void updateTask(ITask task) {
-        Objects.requireNonNull(task, "task is required");
-        try {
-            dao.updateTask(task);
-        } catch (TasksDAOException e) {
-            System.err.println("DAO error (updateTask): " + e.getMessage());
-        }
-        reloadSafe();
+    public void deleteTask(int id) throws TasksDAOException {
+        validateId(id);
+        dao.deleteTask(id);      // IMPORTANT: using the real ID fixes "Invalid id for delete: 0"
+        reload();
     }
 
     /**
-     * Deletes a task by id and refreshes the cache.
+     * Marks task state by id.
+     *
+     * @param id    existing task id
+     * @param state non-null state
+     * @throws Exception wraps {@link TasksDAOException} or validation exceptions
      */
-    public void deleteTask(int id) {
-        try {
-            dao.deleteTask(id);
-        } catch (TasksDAOException e) {
-            System.err.println("DAO error (deleteTask): " + e.getMessage());
+    public void markState(int id, TaskState state) throws Exception {
+        validateId(id);
+        Objects.requireNonNull(state, "state must not be null");
+
+        // Option A: fetch existing task, update only state, persist.
+        ITask original = dao.getTask(id);
+        if (original == null) {
+            throw new TasksDAOException("Task not found: id=" + id);
         }
-        reloadSafe();
+        Task updated = new Task(
+                original.getId(),
+                safe(original.getTitle()),
+                safe(original.getDescription()),
+                state
+        );
+        dao.updateTask(updated);
+        reload();
     }
 
-    /**
-     * Marks a task state by id and refreshes the cache.
-     * Swallows ValidationException from the domain (illegal transition, etc.).
-     */
-    public void markTaskState(int id, TaskState newState) {
-        Objects.requireNonNull(newState, "newState is required");
-        Optional<ITask> opt = findTaskById(id);
-        if (opt.isEmpty()) return;
+    // =====================
+    // Helpers & validation
+    // =====================
 
-        ITask t = opt.get();
-        try {
-            Task updated = new Task(t.getId(), t.getTitle(), t.getDescription(), newState);
-            dao.updateTask(updated);
-        } catch (ValidationException ve) {
-            System.err.println("Validation error (markTaskState): " + ve.getMessage());
-            return; // do not reload; nothing changed
-        } catch (TasksDAOException de) {
-            System.err.println("DAO error (updateTask after mark): " + de.getMessage());
-        }
-        reloadSafe();
+    private static String safe(String s) {
+        return (s == null) ? "" : s;
     }
 
-    // -------------------- Filtering --------------------
-
-    /**
-     * Applies filters and updates the filtered snapshot.
-     * @param titleLike substring or empty; case-insensitive
-     * @param state desired state or null to ignore
-     */
-    public void applyFilters(String titleLike, TaskState state) {
-        this.titleContains = titleLike == null ? "" : titleLike;
-        this.stateEquals = state;
-        reapplyFilters();
+    private static void validateTitle(String title) {
+        if (title == null || title.trim().isEmpty()) {
+            throw new IllegalArgumentException("title must not be empty");
+        }
     }
 
-    private void reapplyFilters() {
-        String needle = titleContains == null ? "" : titleContains.trim().toLowerCase();
-        List<ITask> out = new ArrayList<>();
-        for (ITask t : all) {
-            boolean ok = true;
-            if (!needle.isEmpty()) {
-                ok &= t.getTitle() != null && t.getTitle().toLowerCase().contains(needle);
-            }
-            if (stateEquals != null) {
-                ok &= t.getState() == stateEquals;
-            }
-            if (ok) out.add(t);
+    private static void validateId(int id) {
+        if (id < 0) {
+            throw new IllegalArgumentException("invalid id: " + id);
         }
-        this.filtered = List.copyOf(out);
-    }
-
-    // -------------------- Reporting --------------------
-
-    /**
-     * Generates a simple plain-text report with task counts by state.
-     * (Domain may also provide Visitor-based reports; this keeps UI independent.)
-     */
-    public String generatePlainTextReport() {
-        int todo = 0, inProg = 0, done = 0;
-        for (ITask t : all) {
-            if (t.getState() == TaskState.ToDo) todo++;
-            else if (t.getState() == TaskState.InProgress) inProg++;
-            else if (t.getState() == TaskState.Completed) done++;
-        }
-        int total = all.size();
-        return "Tasks Report\n"
-                + "------------\n"
-                + "Total     : " + total + "\n"
-                + "ToDo      : " + todo + "\n"
-                + "InProgress: " + inProg + "\n"
-                + "Completed : " + done + "\n";
     }
 }

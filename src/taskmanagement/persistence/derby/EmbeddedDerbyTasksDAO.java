@@ -75,11 +75,19 @@ public final class EmbeddedDerbyTasksDAO implements ITasksDAO {
     public void addTask(ITask task) throws TasksDAOException {
         final String sql = "INSERT INTO " + DerbyConfig.TABLE_TASKS + " (id, title, description, state) VALUES (?, ?, ?, ?)";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, task.getId());
+
+            // Minimal fix: if the caller passed id<=0, allocate the next id from DB.
+            int idToInsert = task.getId();
+            if (idToInsert <= 0) {
+                idToInsert = nextId(); // uses the same single connection
+            }
+
+            ps.setInt(1, idToInsert);
             ps.setString(2, task.getTitle());
             ps.setString(3, task.getDescription());
             ps.setString(4, task.getState().name());
             ps.executeUpdate();
+
         } catch (SQLException e) {
             // Derby duplicate key SQLState is 23505
             if ("23505".equals(e.getSQLState())) {
@@ -143,6 +151,19 @@ public final class EmbeddedDerbyTasksDAO implements ITasksDAO {
         String stateStr = rs.getString("state");
         TaskState state = TaskState.valueOf(stateStr);
         return new Task(id, title, description, state);
+    }
+
+    /**
+     * Computes the next available ID from the current table contents.
+     * Keeps the existing schema (no IDENTITY column) and avoids duplicate-key on id=0.
+     */
+    private int nextId() throws SQLException {
+        final String sql = "SELECT COALESCE(MAX(id), -1) + 1 FROM " + DerbyConfig.TABLE_TASKS;
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            rs.next();
+            return rs.getInt(1);
+        }
     }
 
     /** Optional: call on app shutdown if you want a clean Derby shutdown. */

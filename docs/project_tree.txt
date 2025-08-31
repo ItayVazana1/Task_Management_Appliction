@@ -1,4 +1,4 @@
-Generated: 2025-08-30 14:32:17 (local)
+Generated: 2025-08-31 13:56:52 (local)
 
 Task_Management_Appliction/
 ├── .gitignore [OK]
@@ -18,9 +18,9 @@ Task_Management_Appliction/
 ├── src/
 │   └── taskmanagement/
 │       ├── app/
-│       │   ├── App.java [EMPTY]
-│       │   ├── Bootstrap.java [EMPTY]
-│       │   └── FullStackSmokeTest.java [OK]
+│       │   ├── App.java [OK]
+│       │   ├── Bootstrap.java [OK]
+│       │   └── BootstrapDerbyInit.java [OK]
 │       ├── application/
 │       │   └── viewmodel/
 │       │       ├── TasksViewModel.java [OK]
@@ -67,11 +67,19 @@ Task_Management_Appliction/
 │       │       ├── DerbyConfig.java [OK]
 │       │       └── EmbeddedDerbyTasksDAO.java [OK]
 │       ├── ui/
-│       │   ├── MainFrame.java [EMPTY]
-│       │   └── panels/
-│       │       ├── FiltersPanel.java [EMPTY]
-│       │       ├── TaskEditorDialog.java [EMPTY]
-│       │       └── TaskListPanel.java [EMPTY]
+│       │   ├── UITheme.java [OK]
+│       │   └── views/
+│       │       ├── AboutDialog.form [OK]
+│       │       ├── AboutDialog.java [OK]
+│       │       ├── MainFrame.form [OK]
+│       │       ├── MainFrame.java [OK]
+│       │       └── panels/
+│       │           ├── FlitersPanel.form [OK]
+│       │           ├── FlitersPanel.java [OK]
+│       │           ├── TaskEditorDialog.form [OK]
+│       │           ├── TaskEditorDialog.java [OK]
+│       │           ├── TaskListPanel.form [OK]
+│       │           └── TaskListPanel.java [OK]
 │       └── util/
 │           └── Strings.java [EMPTY]
 └── tasksdb/

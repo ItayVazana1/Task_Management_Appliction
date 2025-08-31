@@ -12,5 +12,6 @@ Thumbs.db
 # Compiled classes
 *.class
 # Local data
-data/
-data/
+tasksdb/
+# helper scripts
+DumpTree.py
