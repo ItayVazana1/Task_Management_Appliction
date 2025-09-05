@@ -1,4 +1,4 @@
-package ui_test.styles;
+package taskmanagement.ui.styles;
 
 import java.awt.*;
 

@@ -3,61 +3,54 @@ package taskmanagement.application.viewmodel.commands;
 import taskmanagement.domain.ITask;
 import taskmanagement.domain.TaskState;
 import taskmanagement.domain.exceptions.ValidationException;
-import taskmanagement.persistence.DAOProvider;
 import taskmanagement.persistence.ITasksDAO;
 import taskmanagement.persistence.TasksDAOException;
 
 /**
- * Command: mark task state with lifecycle enforcement.
- * Recommended fix (A): validate transition in execute() before DAO update.
+ * Command: change a task's lifecycle state.
+ * Executes as an update; undo restores previous snapshot.
  */
 public final class MarkStateCommand implements Command {
 
+    /** Factory for creating a new immutable snapshot with a different state. */
+    @FunctionalInterface
     public interface TaskFactory {
-        ITask copyWithState(ITask source, TaskState target) throws ValidationException;
+        ITask copyWithState(ITask src, TaskState newState) throws ValidationException;
     }
 
+    private final ITasksDAO dao;
     private final ITask beforeSnapshot;
-    private final ITask afterSnapshot;
     private final TaskState targetState;
+    private final TaskFactory factory;
 
-    public MarkStateCommand(ITask beforeSnapshot, TaskState targetState, TaskFactory factory)
-            throws ValidationException {
-        if (beforeSnapshot == null) {
-            throw new IllegalArgumentException("beforeSnapshot must not be null");
-        }
-        if (targetState == null) {
-            throw new IllegalArgumentException("targetState must not be null");
-        }
-        if (factory == null) {
-            throw new IllegalArgumentException("factory must not be null");
-        }
+    private ITask afterSnapshot; // lazily created at execute()
+
+    /**
+     * @param dao            tasks DAO
+     * @param beforeSnapshot full snapshot of current entity
+     * @param targetState    state to apply
+     * @param factory        creates a new snapshot based on beforeSnapshot & targetState
+     */
+    public MarkStateCommand(ITasksDAO dao, ITask beforeSnapshot, TaskState targetState, TaskFactory factory) {
+        this.dao = dao;
         this.beforeSnapshot = beforeSnapshot;
         this.targetState = targetState;
-        this.afterSnapshot = factory.copyWithState(beforeSnapshot, targetState);
+        this.factory = factory;
     }
 
     @Override
-    public String name() {
-        return "Mark Task State";
-    }
+    public String name() { return "Mark State: " + targetState; }
 
     @Override
     public void execute() throws TasksDAOException, ValidationException {
-        // ✅ Enforce lifecycle rule here (prevents bypass via “new Task with target state”)
-        if (!beforeSnapshot.getState().canTransitionTo(targetState)) {
-            throw new ValidationException("Illegal state transition: "
-                    + beforeSnapshot.getState() + " -> " + targetState);
+        if (afterSnapshot == null) {
+            afterSnapshot = factory.copyWithState(beforeSnapshot, targetState);
         }
-        ITasksDAO dao = DAOProvider.get();
         dao.updateTask(afterSnapshot);
     }
 
     @Override
     public void undo() throws TasksDAOException {
-        ITasksDAO dao = DAOProvider.get();
         dao.updateTask(beforeSnapshot);
     }
 }
-
-

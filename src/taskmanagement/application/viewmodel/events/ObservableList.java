@@ -6,96 +6,79 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * A minimal observable list used by the ViewModel to expose task collections.
- * Not thread-safe; UI must marshal notifications to EDT when needed.
+ * Very small observable list wrapper for UI binding.
+ * <p>
+ * Unlike a full list implementation, this wrapper keeps an internal list and
+ * exposes set/clear/replace methods that fire a single "list changed" event.
+ * Use this for simple table refreshes.
+ *
  * @param <T> element type
  */
 public final class ObservableList<T> {
 
-    /**
-     * Listener for list change events.
-     * Provides a minimal diff semantic: ADDED / REMOVED / CLEARED.
-     * @param <T> element type
-     */
-    public interface ListChangeListener<T> {
-        enum Kind { ADDED, REMOVED, CLEARED }
-
+    /** Listener notified when the list reference or contents change as a whole. */
+    @FunctionalInterface
+    public interface Listener<T> {
         /**
-         * Called on list mutation.
-         * @param kind the change kind
-         * @param elements affected elements (immutable snapshot; empty for CLEARED)
+         * Called when the list is replaced/cleared/updated.
+         *
+         * @param newSnapshot immutable snapshot after the change
          */
-        void onChanged(Kind kind, List<T> elements);
+        void onListChanged(List<T> newSnapshot);
     }
 
-    private final List<T> internal = new ArrayList<>();
-    private final List<ListChangeListener<T>> listeners = new ArrayList<>();
+    private List<T> data = List.of();
+    private final List<Listener<T>> listeners = new ArrayList<>();
 
-    /**
-     * @return immutable snapshot of current elements.
-     */
-    public List<T> snapshot() {
-        return Collections.unmodifiableList(new ArrayList<>(internal));
+    /** Returns an immutable snapshot of current elements. */
+    public List<T> get() {
+        return data;
     }
 
-    /**
-     * Adds a single element and notifies listeners.
-     * @param element element to add (must not be null)
-     */
-    public void add(T element) {
-        Objects.requireNonNull(element, "element");
-        internal.add(element);
-        notifyListeners(ListChangeListener.Kind.ADDED, List.of(element));
-    }
-
-    /**
-     * Removes a single element (by equals) and notifies if removed.
-     * @param element element to remove (must not be null)
-     * @return true if removed
-     */
-    public boolean remove(T element) {
-        Objects.requireNonNull(element, "element");
-        boolean removed = internal.remove(element);
-        if (removed) {
-            notifyListeners(ListChangeListener.Kind.REMOVED, List.of(element));
+    /** Replaces the entire content and notifies listeners. */
+    public void set(List<T> items) {
+        List<T> newSnap = (items == null) ? List.of() : List.copyOf(items);
+        if (!Objects.equals(this.data, newSnap)) {
+            this.data = newSnap;
+            fireChanged();
         }
-        return removed;
     }
 
-    /**
-     * Clears the list and notifies listeners (CLEARED).
-     */
+    /** Clears the content and notifies listeners if non-empty. */
     public void clear() {
-        if (!internal.isEmpty()) {
-            internal.clear();
-            notifyListeners(ListChangeListener.Kind.CLEARED, List.of());
+        if (!data.isEmpty()) {
+            this.data = List.of();
+            fireChanged();
         }
     }
 
-    /**
-     * Adds a list change listener (no duplicates).
-     * @param listener listener to add
-     */
-    public void addListener(ListChangeListener<T> listener) {
-        if (listener == null) return;
-        if (!listeners.contains(listener)) {
-            listeners.add(listener);
+    /** Adds a listener; no-op if already added. */
+    public void addListener(Listener<T> l) {
+        Objects.requireNonNull(l, "listener must not be null");
+        if (!listeners.contains(l)) {
+            listeners.add(l);
         }
     }
 
-    /**
-     * Removes a list change listener.
-     * @param listener listener to remove
-     */
-    public void removeListener(ListChangeListener<T> listener) {
-        listeners.remove(listener);
+    /** Removes a listener; no-op if not present. */
+    public void removeListener(Listener<T> l) {
+        listeners.remove(l);
     }
 
-    private void notifyListeners(ListChangeListener.Kind kind, List<T> elements) {
-        List<ListChangeListener<T>> snapshot = List.copyOf(listeners);
-        List<T> els = List.copyOf(elements);
-        for (ListChangeListener<T> l : snapshot) {
-            l.onChanged(kind, els);
+    /** Current listeners (unmodifiable snapshot). */
+    public List<Listener<T>> getListeners() {
+        return Collections.unmodifiableList(listeners);
+    }
+
+    private void fireChanged() {
+        List<Listener<T>> copy = List.copyOf(listeners);
+        List<T> snap = data; // already immutable
+        for (Listener<T> l : copy) {
+            try {
+                l.onListChanged(snap);
+            } catch (RuntimeException ex) {
+                // swallow to keep others notified; consider logging if policy exists
+            }
         }
     }
 }

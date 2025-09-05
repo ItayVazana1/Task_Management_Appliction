@@ -1,7 +1,7 @@
-package ui_test.widgets;
+package taskmanagement.ui.widgets;
 
-import ui_test.styles.AppTheme;
-import ui_test.util.UiUtils;
+import taskmanagement.ui.styles.AppTheme;
+import taskmanagement.ui.util.UiUtils;
 
 import javax.swing.*;
 import java.awt.*;
@@ -10,20 +10,19 @@ import java.util.function.Consumer;
 /**
  * HeaderBar
  * Left:  title label (~60%)
- * Right: two rounded "pill" buttons (About / Close) (~40%)
+ * Right: pill buttons (About / Close) (~40%)
  *
- * - Uses AppTheme for colors/typography/sizing.
- * - Uses UiUtils.styleHeaderPillButton(...) for pill styling (rounded, hover/press).
- * - Exposes handler registration: onAbout(...) / onClose(...).
- * - Title can be set via setTitleText(...).
- *
- * Comments in English only.
+ * Uses AppTheme tokens for colors/sizing and UiUtils.styleHeaderPillButton(...)
+ * for the rounded header buttons.
  */
 public class HeaderBar extends JPanel {
 
     private final JLabel  titleLabel;
     private final JButton aboutButton;
     private final JButton closeButton;
+
+    private Consumer<JButton> aboutHandler;
+    private Consumer<JButton> closeHandler;
 
     public HeaderBar() {
         setOpaque(true);
@@ -49,17 +48,20 @@ public class HeaderBar extends JPanel {
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, AppTheme.ACTIONS_HGAP, AppTheme.ACTIONS_VGAP));
         actions.setOpaque(false);
 
-        // Optional icons (if exist under resources)
-        Icon infoIcon  = UiUtils.loadRasterIcon("/ui_test/resources/information.png", 40, 40);
-        Icon closeIcon = UiUtils.loadRasterIcon("/ui_test/resources/exit.png", 50, 50);
+        Icon infoIcon  = UiUtils.loadRasterIcon("/taskmanagement/ui/resources/information.png", 40, 40);
+        Icon closeIcon = UiUtils.loadRasterIcon("/taskmanagement/ui/resources/exit.png", 50, 50);
 
         aboutButton = new JButton("", infoIcon);
         UiUtils.styleHeaderPillButton(aboutButton, AppTheme.HB_ABOUT_BG, AppTheme.HB_ABOUT_FG);
-        aboutButton.setActionCommand("ABOUT");
+        aboutButton.addActionListener(e -> {
+            if (aboutHandler != null) aboutHandler.accept(aboutButton);
+        });
 
         closeButton = new JButton("", closeIcon);
         UiUtils.styleHeaderPillButton(closeButton, AppTheme.HB_CLOSE_BG, AppTheme.HB_CLOSE_FG);
-        closeButton.setActionCommand("CLOSE");
+        closeButton.addActionListener(e -> {
+            if (closeHandler != null) closeHandler.accept(closeButton);
+        });
 
         actions.add(aboutButton);
         actions.add(closeButton);
@@ -69,7 +71,9 @@ public class HeaderBar extends JPanel {
         add(actions, gbc);
     }
 
-    // --- Public API ---
+    // ---------------------------------------------------------------------
+    // Public API
+    // ---------------------------------------------------------------------
 
     /** Change the title text on the left side. */
     public void setTitleText(String text) {
@@ -83,6 +87,7 @@ public class HeaderBar extends JPanel {
             aboutButton.removeActionListener(l);
         }
         aboutButton.addActionListener(e -> handler.accept(aboutButton));
+        this.aboutHandler = handler;
     }
 
     /** Register a click handler for the Close button. */
@@ -92,10 +97,6 @@ public class HeaderBar extends JPanel {
             closeButton.removeActionListener(l);
         }
         closeButton.addActionListener(e -> handler.accept(closeButton));
+        this.closeHandler = handler;
     }
-
-    // Accessors if external controllers need raw components
-    public JLabel getTitleLabel()   { return titleLabel; }
-    public JButton getAboutButton() { return aboutButton; }
-    public JButton getCloseButton() { return closeButton; }
 }

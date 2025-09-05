@@ -9,30 +9,34 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Sorts tasks by lifecycle state (ToDo < InProgress < Completed), then by title.
+ * Sorts tasks by lifecycle state (ToDo &lt; InProgress &lt; Completed),
+ * then by title (case-insensitive), then by id to stabilize order.
  */
 public final class SortByState implements SortStrategy {
 
     // explicit order instead of ordinal, for clarity and future-proofing
     private static int rank(TaskState s) {
-        if (s == null) return Integer.MAX_VALUE; // push nulls to the end
+        if (s == null) return Integer.MAX_VALUE; // nulls last (defensive)
         return switch (s) {
-            case ToDo -> 0;
+            case ToDo       -> 0;
             case InProgress -> 1;
-            case Completed -> 2;
+            case Completed  -> 2;
         };
     }
 
     private static final Comparator<ITask> CMP =
-            Comparator.comparingInt((ITask t) -> rank(t.getState()))
+            Comparator
+                    .comparingInt((ITask t) -> rank(t.getState()))
                     .thenComparing(t -> safe(t.getTitle()).toLowerCase())
                     .thenComparingInt(ITask::getId);
 
+    /** {@inheritDoc} */
     @Override
     public String displayName() {
         return "State (ToDo→Completed)";
     }
 
+    /** {@inheritDoc} */
     @Override
     public List<ITask> sort(List<ITask> items) {
         Objects.requireNonNull(items, "items");
@@ -41,5 +45,7 @@ public final class SortByState implements SortStrategy {
         return copy;
     }
 
-    private static String safe(String s) { return (s == null) ? "" : s; }
+    private static String safe(String s) {
+        return (s == null) ? "" : s;
+    }
 }

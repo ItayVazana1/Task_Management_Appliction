@@ -2,7 +2,6 @@ package taskmanagement.domain;
 
 import taskmanagement.domain.exceptions.ValidationException;
 import taskmanagement.domain.visitor.TaskVisitor;
-// ⬇️ ייבוא הרקורדים ל-Visitor (ייצוא/דוחות)
 import taskmanagement.domain.visitor.export.CompletedTaskRec;
 import taskmanagement.domain.visitor.export.InProgressTaskRec;
 import taskmanagement.domain.visitor.export.ToDoTaskRec;
@@ -10,146 +9,168 @@ import taskmanagement.domain.visitor.export.ToDoTaskRec;
 import java.util.Objects;
 
 /**
- * Represents a single task in the system.
- * Validation is performed in setters; constructors must call setters.
- * For new (unsaved) tasks, id==0 is allowed as a placeholder (DAO will assign a real id).
+ * Immutable-identity Task entity (id) with validated fields and
+ * a behavioral state (State pattern via {@link TaskState} enum).
+ *
+ * <p>Notes:
+ * <ul>
+ *   <li>Constructors call setters to reuse validation.</li>
+ *   <li>{@code setState} validates non-null only (keeps backward compatibility).</li>
+ *   <li>State-pattern helpers {@link #transitionTo(TaskState)} and {@link #advanceState()} enforce legal transitions.</li>
+ * </ul>
  */
 public class Task implements ITask {
 
-    /** Identifier: 0 for unsaved placeholder; positive after persistence. */
     private int id;
-
-    /** Non-empty title (trimmed). */
     private String title;
-
-    /** Optional description (never null; empty string if unspecified). */
     private String description;
-
-    /** Current state (non-null). */
     private TaskState state;
 
     /**
-     * Primary constructor.
+     * Creates a task with all fields. Setters perform validation.
      *
-     * @param id          0 (unsaved) or positive (persisted)
-     * @param title       non-blank
-     * @param description optional (null -> "")
-     * @param state       non-null
-     * @throws ValidationException if arguments are invalid or transition is illegal
+     * @param id          task id (>= 0 recommended; DAO may assign)
+     * @param title       non-empty title
+     * @param description nullable description
+     * @param state       non-null state
+     * @throws IllegalArgumentException if title is blank or state is null
      */
-    public Task(int id, String title, String description, TaskState state) throws ValidationException {
+    public Task(int id, String title, String description, TaskState state) {
         setId(id);
         setTitle(title);
         setDescription(description);
         setState(state);
     }
 
-    @Override
-    public int getId() { return id; }
-
-    @Override
-    public String getTitle() { return title; }
-
-    @Override
-    public String getDescription() { return description; }
-
-    @Override
-    public TaskState getState() { return state; }
-
-    /**
-     * Accepts a visitor (Visitor pattern).
-     * Maps this Task to a record by state and dispatches to the visitor.
-     */
-    @Override
-    public void accept(TaskVisitor visitor) {
-        // Pattern matching by TaskState via distinct record variants:
-        switch (getState()) {
-            case ToDo -> visitor.visit(new ToDoTaskRec(getId(), getTitle(), getDescription()));
-            case InProgress -> visitor.visit(new InProgressTaskRec(getId(), getTitle(), getDescription()));
-            case Completed -> visitor.visit(new CompletedTaskRec(getId(), getTitle(), getDescription()));
-        }
+    /** Copy constructor. */
+    public Task(Task other) {
+        this(Objects.requireNonNull(other, "other must not be null").id,
+                other.title, other.description, other.state);
     }
 
-    // ------------ validation setters ------------
+    // ------------------------------------------------------------
+    // ITask (public API expected by the rest of the application)
+    // ------------------------------------------------------------
+
+    @Override
+    public int getId() {
+        return id;
+    }
 
     /**
-     * Sets the id.
-     * 0 is allowed to represent an unsaved task; positive means persisted.
-     *
-     * @param id 0 or positive
-     * @throws ValidationException if id is negative
+     * Sets the identifier.
+     * <p>Note: negative ids are allowed only if your DAO uses them as placeholders.
+     * If not, keep ids >= 0.
      */
-    private void setId(int id) throws ValidationException {
-        if (id < 0) {
-            throw new ValidationException("id must be zero (unsaved) or positive");
-        }
+    public void setId(int id) {
         this.id = id;
     }
 
-    /**
-     * Sets the title (non-blank).
-     */
-    private void setTitle(String title) throws ValidationException {
-        if (title == null || title.isBlank()) {
-            throw new ValidationException("title is required");
+    @Override
+    public String getTitle() {
+        return title;
+    }
+
+    /** Sets a non-blank title. */
+    public void setTitle(String title) {
+        if (title == null || title.trim().isEmpty()) {
+            throw new IllegalArgumentException("title must not be empty");
         }
         this.title = title.trim();
     }
 
-    /**
-     * Sets the description (null -> "").
-     */
-    private void setDescription(String description) {
-        this.description = (description == null) ? "" : description.trim();
+    @Override
+    public String getDescription() {
+        return description;
+    }
+
+    /** Sets description (nullable). Trims when non-null. */
+    public void setDescription(String description) {
+        this.description = (description == null) ? null : description.trim();
+    }
+
+    @Override
+    public TaskState getState() {
+        return state;
     }
 
     /**
-     * Changes state while enforcing lifecycle rules.
+     * Sets state (non-null). Does not enforce transition rules to preserve
+     * backward compatibility with existing DAO/VM flows that directly set a state.
      */
-    public void setState(TaskState state) throws ValidationException {
+    public void setState(TaskState state) {
         if (state == null) {
-            throw new ValidationException("state is required");
-        }
-        if (this.state == null) {
-            this.state = state; // initial assignment
-            return;
-        }
-        if (!this.state.canTransitionTo(state)) {
-            throw new ValidationException("Illegal state transition: " + this.state + " -> " + state);
+            throw new IllegalArgumentException("state must not be null");
         }
         this.state = state;
     }
 
-    // ------------ Object overrides ------------
-
     /**
-     * Equality:
-     * - If both ids are positive → compare by id.
-     * - If either id is 0 (unsaved) → fall back to reference equality.
+     * State-pattern helper: transition to {@code target} only if allowed by current state's rules.
+     *
+     * @param target desired target state
+     * @throws ValidationException if transition is not allowed
+     * @throws NullPointerException if target is null
      */
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof Task t)) return false;
-        if (this.id == 0 || t.id == 0) {
-            // Avoid considering two different unsaved tasks (id==0) as equal
-            return false;
+    public void transitionTo(TaskState target) throws ValidationException {
+        Objects.requireNonNull(target, "target must not be null");
+        if (this.state == null || this.state.canTransitionTo(target)) {
+            this.state = target;
+        } else {
+            throw new ValidationException("Illegal state transition: " + this.state + " -> " + target);
         }
-        return this.id == t.id;
     }
 
     /**
-     * Hash code:
-     * - Positive id → hash by id.
-     * - Unsaved (id==0) → identity-based hash to avoid collisions between new tasks.
+     * State-pattern helper: advance to the next state according to the
+     * current state's behavior.
+     *
+     * @throws ValidationException if advancing is not allowed (shouldn't happen with current rules)
      */
+    public void advanceState() throws ValidationException {
+        transitionTo(Objects.requireNonNull(this.state, "current state is null").next());
+    }
+
+    // ------------------------------------------------------------
+    // Visitor integration: create a record per state and dispatch
+    // ------------------------------------------------------------
+
+    @Override
+    public void accept(TaskVisitor visitor) {
+        Objects.requireNonNull(visitor, "visitor must not be null");
+        final TaskState s = Objects.requireNonNull(this.state, "state must not be null");
+        switch (s) {
+            case ToDo -> visitor.visit(new ToDoTaskRec(id, title, description));
+            case InProgress -> visitor.visit(new InProgressTaskRec(id, title, description));
+            case Completed -> visitor.visit(new CompletedTaskRec(id, title, description));
+        }
+    }
+
+    // ------------------------------------------------------------
+    // Object contracts
+    // ------------------------------------------------------------
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Task other)) return false;
+        // Identity by id (stable under DAO assignment). If ids are not assigned yet,
+        // equals falls back to reference equality above.
+        return id == other.id;
+    }
+
     @Override
     public int hashCode() {
-        return (id == 0) ? System.identityHashCode(this) : Objects.hash(id);
+        return Integer.hashCode(id);
     }
 
     @Override
     public String toString() {
-        return (id == 0 ? "NEW" : String.valueOf(id)) + ":" + title + " [" + state + "]";
+        return "Task{" +
+                "id=" + id +
+                ", title='" + title + '\'' +
+                ", description='" + description + '\'' +
+                ", state=" + state +
+                '}';
     }
 }

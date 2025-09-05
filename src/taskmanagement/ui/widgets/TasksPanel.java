@@ -1,6 +1,6 @@
-package ui_test.widgets;
+package taskmanagement.ui.widgets;
 
-import ui_test.util.RoundedPanel;
+import taskmanagement.ui.util.RoundedPanel;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;

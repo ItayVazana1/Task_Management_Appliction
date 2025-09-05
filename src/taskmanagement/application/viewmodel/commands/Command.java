@@ -4,28 +4,25 @@ import taskmanagement.domain.exceptions.ValidationException;
 import taskmanagement.persistence.TasksDAOException;
 
 /**
- * Represents a reversible operation in the application.
+ * A reversible application action (Command pattern).
+ * Implementations should carry all data needed to execute and undo safely.
  */
 public interface Command {
 
-    /**
-     * @return a short human-readable name.
-     */
+    /** @return short human-readable name for menus/logging. */
     String name();
 
     /**
-     * Executes the command.
-     *
-     * @throws TasksDAOException on DAO failures
-     * @throws ValidationException on validation failures
+     * Executes the action. Must be idempotent with respect to redo (i.e., redo calls execute again).
+     * @throws TasksDAOException if a persistence error occurs
+     * @throws ValidationException if domain validation fails
      */
     void execute() throws TasksDAOException, ValidationException;
 
     /**
-     * Reverts the side effects of {@link #execute()}.
-     *
-     * @throws TasksDAOException on DAO failures
-     * @throws ValidationException on validation failures
+     * Reverts the last {@link #execute()} of this command.
+     * @throws TasksDAOException if a persistence error occurs
+     * @throws ValidationException if domain validation fails
      */
     void undo() throws TasksDAOException, ValidationException;
 }

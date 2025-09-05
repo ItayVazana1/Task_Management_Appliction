@@ -1,11 +1,19 @@
-package ui_test.widgets;
+package taskmanagement.ui.widgets;
 
-import ui_test.styles.AppTheme;
-import ui_test.util.UiUtils;
-import ui_test.util.RoundedPanel;
+import taskmanagement.ui.styles.AppTheme;
+import taskmanagement.ui.util.UiUtils;
+import taskmanagement.ui.util.RoundedPanel;
+import taskmanagement.ui.dialogs.ExportDialog;
 
 import javax.swing.*;
 import java.awt.*;
+
+/* =====================  ADD YOUR IMPORT HERE  =====================
+ * החלף ל-FQCN האמיתי של הדיאלוג שלך.
+ * דוגמה:
+ * import taskmanagement.ui.views.ExportDialog;
+ * ================================================================= */
+
 
 /**
  * ToolBox
@@ -40,7 +48,7 @@ public class ToolBox extends RoundedPanel {
     private final JRadioButton rbCompleted  = new JRadioButton("Completed");
 
     // Bottom section (export)
-    private final JButton exportBtn;
+    private JButton exportBtn; // assigned in ctor from bottom section
 
     public ToolBox() {
         // keep consistent container look (use PANEL_BG we added; equals DARK_GREY)
@@ -48,7 +56,6 @@ public class ToolBox extends RoundedPanel {
         setOpaque(false);
 
         // --- Lock a sane sidebar width (preferred == minimum) ---
-        // If ContentArea also locks width, this complements it without conflicts.
         int fixedWidth = Math.max(FALLBACK_WIDTH, AppTheme.TB_EXPORT_W + INNER_PAD * 2);
         Dimension fixed = new Dimension(fixedWidth, 10);
         setPreferredSize(fixed);
@@ -83,7 +90,11 @@ public class ToolBox extends RoundedPanel {
         root.weighty = 1.0;
         add(bottom, root);
 
+        // get export button reference from bottom
         exportBtn = (JButton) bottom.getClientProperty("btnRef");
+
+        // wire actions (only Export for now)
+        wireActions();
     }
 
     // ---- sections ----
@@ -150,9 +161,8 @@ public class ToolBox extends RoundedPanel {
         JPanel panel = new JPanel(new GridBagLayout());
         panel.setOpaque(false);
 
-        // Export icon from resources (put at: resources/ui_test/resources/download.png)
         Icon exportIcon = safeIcon(UiUtils.loadRasterIcon(
-                "/ui_test/resources/download.png",
+                "/taskmanagement/ui/resources/download.png",
                 AppTheme.TB_EXPORT_ICON,
                 AppTheme.TB_EXPORT_ICON
         ));
@@ -177,6 +187,32 @@ public class ToolBox extends RoundedPanel {
         // expose to ctor
         panel.putClientProperty("btnRef", btn);
         return panel;
+    }
+
+    // ---- actions ----
+
+    private void wireActions() {
+        if (exportBtn != null) {
+            exportBtn.addActionListener(e -> onExport());
+        }
+    }
+
+    /** Opens ExportDialog directly (no reflection). Adjust constructor if needed. */
+    private void onExport() {
+        try {
+            // ברירת מחדל: בנאי ללא פרמטרים. עדכן אם אצלך נדרש owner/VM.
+            ExportDialog dlg = new ExportDialog(null); // <-- שנה בהתאם לצורך
+            dlg.setModal(true);
+            dlg.setResizable(false);
+            dlg.pack();
+            dlg.setLocationRelativeTo(this);
+            dlg.setVisible(true);
+            dlg.dispose();
+        } catch (Throwable ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Failed to open ExportDialog. Please adjust the import/constructor.",
+                    "Export", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     // ---- helpers ----

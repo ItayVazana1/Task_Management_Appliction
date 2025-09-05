@@ -1,6 +1,5 @@
 package taskmanagement.domain.filter;
 
-import taskmanagement.domain.ITask;
 import taskmanagement.domain.TaskState;
 
 /**

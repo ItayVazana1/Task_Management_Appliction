@@ -1,24 +1,33 @@
-package ui_test.util;
+package taskmanagement.ui.util;
 
-import ui_test.styles.AppTheme;
+import taskmanagement.ui.styles.AppTheme;
 
 import javax.swing.*;
 import javax.swing.border.Border;
 import java.awt.*;
 
 /**
- * UI utilities: stable hover buttons, color helpers, custom borders,
- * and small Swing helpers. This class keeps legacy helpers intact and
- * adds new helpers in an append-only manner.
+ * UiUtils
+ * -------
+ * Swing utilities for styling widgets in a consistent, theme-aware way.
+ * This class is append-only: legacy helpers remain intact and new helpers
+ * are added without breaking existing signatures.
  */
 public final class UiUtils {
     private UiUtils() {}
 
-    // ----------------------------------------------------------------
-    // Legacy helpers (kept intact)
-    // ----------------------------------------------------------------
+    // =====================================================================
+    // LEGACY HELPERS (KEPT INTACT)
+    // =====================================================================
 
-    /** Stable-size modern button (no layout shift on hover/press). */
+    /**
+     * Styles a JButton to keep stable size on hover/press (no layout shift)
+     * while providing simple color feedback.
+     *
+     * @param b      the button to style
+     * @param baseBg base background color
+     * @param baseFg base foreground (text/icon) color
+     */
     public static void styleStableHoverButton(JButton b, Color baseBg, Color baseFg) {
         b.setFocusPainted(false);
         b.setRolloverEnabled(true);
@@ -31,17 +40,17 @@ public final class UiUtils {
 
         // Constant border (rounded + fixed padding) — does not change per state
         Border constantBorder = BorderFactory.createCompoundBorder(
-                new RoundedMatteShadowBorder(new Color(0,0,0,60), AppTheme.BTN_RADIUS, 1),
+                new RoundedMatteShadowBorder(new Color(0, 0, 0, 60), AppTheme.BTN_RADIUS, 1),
                 BorderFactory.createEmptyBorder(AppTheme.BTN_PAD_V, AppTheme.BTN_PAD_H,
                         AppTheme.BTN_PAD_V, AppTheme.BTN_PAD_H)
         );
         b.setBorder(constantBorder);
 
         // Precompute hover/press colors (background/foreground only)
-        final Color hoverBg  = shiftForContrast(baseBg, 0.40f);
-        final Color hoverFg  = bestTextFor(hoverBg, baseFg);
-        final Color pressBg  = shiftForContrast(baseBg, 0.55f);
-        final Color pressFg  = bestTextFor(pressBg, baseFg);
+        final Color hoverBg = shiftForContrast(baseBg, 0.40f);
+        final Color hoverFg = bestTextFor(hoverBg, baseFg);
+        final Color pressBg = shiftForContrast(baseBg, 0.55f);
+        final Color pressFg = bestTextFor(pressBg, baseFg);
 
         b.getModel().addChangeListener(e -> {
             ButtonModel m = (ButtonModel) e.getSource();
@@ -82,10 +91,10 @@ public final class UiUtils {
     /** Linear blend between two colors. t in [0..1]. */
     public static Color blend(Color a, Color b, float t) {
         t = Math.max(0f, Math.min(1f, t));
-        int r = Math.round(a.getRed()   + (b.getRed()   - a.getRed())   * t);
+        int r = Math.round(a.getRed() + (b.getRed() - a.getRed()) * t);
         int g = Math.round(a.getGreen() + (b.getGreen() - a.getGreen()) * t);
-        int bl= Math.round(a.getBlue()  + (b.getBlue()  - a.getBlue())  * t);
-        int al= Math.round(a.getAlpha() + (b.getAlpha() - a.getAlpha()) * t);
+        int bl = Math.round(a.getBlue() + (b.getBlue() - a.getBlue()) * t);
+        int al = Math.round(a.getAlpha() + (b.getAlpha() - a.getAlpha()) * t);
         return new Color(r, g, bl, al);
     }
 
@@ -115,11 +124,13 @@ public final class UiUtils {
         private final Color shadow;
         private final int arc;
         private final int depth; // shadow thickness
+
         public RoundedMatteShadowBorder(Color shadow, int arc, int depth) {
             this.shadow = shadow; this.arc = arc; this.depth = Math.max(1, depth);
         }
         @Override public Insets getBorderInsets(Component c) { return new Insets(4, 8, 4 + depth, 8); }
         @Override public boolean isBorderOpaque() { return false; }
+
         @Override
         public void paintBorder(Component c, Graphics g, int x, int y, int w, int h) {
             Graphics2D g2 = (Graphics2D) g.create();
@@ -135,7 +146,10 @@ public final class UiUtils {
         c.setAlignmentX(Component.CENTER_ALIGNMENT);
     }
 
-    /** Create a square JButton with icon (top) and text (bottom), styled for dark backgrounds. */
+    /**
+     * Create a square JButton with icon (top) and text (bottom), styled for dark backgrounds.
+     * (Legacy signature: used by ControlPanel.)
+     */
     public static JButton createSquareActionButton(
             String text,
             Icon icon,
@@ -196,9 +210,9 @@ public final class UiUtils {
     /** Darken a color by factor in [0..1]. */
     public static Color darken(Color c, float factor) {
         factor = Math.max(0f, Math.min(1f, factor));
-        int r = Math.max(0, (int) (c.getRed()   * (1f - factor)));
+        int r = Math.max(0, (int) (c.getRed() * (1f - factor)));
         int g = Math.max(0, (int) (c.getGreen() * (1f - factor)));
-        int b = Math.max(0, (int) (c.getBlue()  * (1f - factor)));
+        int b = Math.max(0, (int) (c.getBlue() * (1f - factor)));
         return new Color(r, g, b, c.getAlpha());
     }
 
@@ -239,11 +253,14 @@ public final class UiUtils {
         };
     }
 
-    // ----------------------------------------------------------------
-    // Append-only helpers for ToolBox / modern widgets
-    // ----------------------------------------------------------------
+    // =====================================================================
+    // APPEND-ONLY HELPERS (MODERN WIDGETS / TOOLBOX / DIALOGS)
+    // =====================================================================
 
-    /** Style a JTextField for dark panels using AppTheme tokens (centered). */
+    /**
+     * Style a JTextField for dark panels using AppTheme tokens (centered).
+     * Useful for ToolBox numeric/text inputs placed under titles.
+     */
     public static void styleTextFieldForDarkCentered(JTextField field) {
         field.putClientProperty("JTextField.showClearButton", true); // FlatLaf hint (safe no-op)
         field.setForeground(AppTheme.TB_TEXT_FG);
@@ -259,6 +276,59 @@ public final class UiUtils {
         Dimension d = new Dimension(AppTheme.TB_FIELD_WIDTH, AppTheme.TB_FIELD_HEIGHT);
         field.setPreferredSize(d);
         field.setMinimumSize(d);
+    }
+
+    /**
+     * Style a generic JTextField for dark UI (left-aligned).
+     * This is the common helper to use in dialogs (e.g., TaskEditorDialog).
+     *
+     * @param field the text field to style
+     */
+    public static void styleTextField(JTextField field) {
+        styleTextField(field, AppTheme.TB_FIELD_BG, AppTheme.TB_TEXT_FG, AppTheme.TB_FIELD_BORDER, false);
+    }
+
+    /**
+     * Advanced variant for styling a JTextField with explicit colors and alignment.
+     *
+     * @param field    the field to style
+     * @param bg       background color
+     * @param fg       text color
+     * @param border   border color
+     * @param centered whether to center the text horizontally
+     */
+    public static void styleTextField(JTextField field, Color bg, Color fg, Color border, boolean centered) {
+        field.putClientProperty("JTextField.showClearButton", true); // FlatLaf hint (safe no-op)
+        field.setForeground(fg);
+        field.setBackground(bg);
+        field.setCaretColor(fg);
+        field.setSelectionColor(darken(bg, 0.25f));
+        field.setSelectedTextColor(fg);
+        field.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(border),
+                BorderFactory.createEmptyBorder(6, 8, 6, 8)
+        ));
+        field.setHorizontalAlignment(centered ? SwingConstants.CENTER : SwingConstants.LEADING);
+    }
+
+    /**
+     * Style a JTextArea for dark UI in dialogs (e.g., task description).
+     * Wraps words, sets caret/selection colors, and applies a thin line border.
+     *
+     * @param area the text area to style
+     */
+    public static void styleTextArea(JTextArea area) {
+        area.setForeground(AppTheme.TB_TEXT_FG);
+        area.setBackground(AppTheme.TB_FIELD_BG);
+        area.setCaretColor(AppTheme.TB_TEXT_FG);
+        area.setSelectionColor(darken(AppTheme.TB_FIELD_BG, 0.25f));
+        area.setSelectedTextColor(AppTheme.TB_TEXT_FG);
+        area.setLineWrap(true);
+        area.setWrapStyleWord(true);
+        area.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(AppTheme.TB_FIELD_BORDER),
+                BorderFactory.createEmptyBorder(6, 8, 6, 8)
+        ));
     }
 
     /** Style a ToolBox title label centered. */
@@ -338,10 +408,7 @@ public final class UiUtils {
 
     /**
      * Create a rounded square button (size×size) that paints its own background,
-     * with an icon on top and text at the bottom. This avoids LAF default background
-     * rectangles around the button and keeps a clean rounded look.
-     *
-     * Signature matches existing calls from ControlPanel.
+     * with an icon on top and text at the bottom. (Used by ControlPanel.)
      */
     public static JButton createPaintedRoundedIconButton(
             String text,
@@ -356,11 +423,9 @@ public final class UiUtils {
             @Override protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                // paint custom rounded background
                 g2.setColor(getBackground());
                 g2.fillRoundRect(0, 0, getWidth(), getHeight(), cornerRadius, cornerRadius);
                 g2.dispose();
-                // then let Swing paint icon+text
                 super.paintComponent(g);
             }
         };
@@ -372,10 +437,10 @@ public final class UiUtils {
         b.setBackground(bg);
         b.setForeground(fg);
 
-        // Font: prefer AppTheme.CTRL_BUTTON_FONT if defined; otherwise use passed size
+        // Prefer dedicated font token if available
         try {
-            if (ui_test.styles.AppTheme.CTRL_BUTTON_FONT != null) {
-                b.setFont(ui_test.styles.AppTheme.CTRL_BUTTON_FONT.deriveFont(fontSize));
+            if (taskmanagement.ui.styles.AppTheme.CTRL_BUTTON_FONT != null) {
+                b.setFont(taskmanagement.ui.styles.AppTheme.CTRL_BUTTON_FONT.deriveFont(fontSize));
             } else {
                 b.setFont(b.getFont().deriveFont(Font.PLAIN, fontSize));
             }
@@ -393,19 +458,22 @@ public final class UiUtils {
         b.setMinimumSize(d);
         b.setMaximumSize(d);
 
-        // Keep hover/press feedback using existing util
+        // Hover/press feedback
         addDarkHoverAndPress(b, bg);
-
         return b;
     }
 
-    // ----------------------------------------------------------------
-    // NEW: Header pill buttons (About / Close)
-    // ----------------------------------------------------------------
+    // =====================================================================
+    // HEADER PILL BUTTONS (ABOUT / CLOSE)
+    // =====================================================================
 
     /**
      * Style a compact rounded header button (pill-like) with stable hover/press.
      * Keeps layout stable (no border size changes); paints background ourselves.
+     *
+     * @param b  button to style
+     * @param bg background color
+     * @param fg foreground (text/icon) color
      */
     public static void styleHeaderPillButton(JButton b, Color bg, Color fg) {
         b.setFocusPainted(false);
@@ -427,7 +495,7 @@ public final class UiUtils {
         b.setBorder(BorderFactory.createEmptyBorder(6, 12, 6, 12));
 
         // Interactive colors
-        final Color base  = bg;
+        final Color base = bg;
         final Color hover = shiftForContrast(base, 0.12f);
         final Color press = shiftForContrast(base, 0.22f);
 
@@ -435,8 +503,8 @@ public final class UiUtils {
         b.getModel().addChangeListener(e -> {
             ButtonModel m = b.getModel();
             if (m.isPressed())      b.setBackground(press);
-            else if (m.isRollover())b.setBackground(hover);
-            else                    b.setBackground(base);
+            else if (m.isRollover()) b.setBackground(hover);
+            else                     b.setBackground(base);
         });
 
         // Paint rounded background
@@ -451,5 +519,4 @@ public final class UiUtils {
             }
         });
     }
-
 }

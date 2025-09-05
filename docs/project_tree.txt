@@ -1,18 +1,31 @@
-Generated: 2025-08-31 21:58:32 (local)
+Generated: 2025-09-06 01:33:33 (local)
 
 Task_Management_Appliction/
 ├── .gitignore [OK]
+├── _ui_excluded/
+│   └── ui/
+│       ├── UITheme.java [OK]
+│       └── views/
+│           ├── AboutDialog.java [OK]
+│           ├── ExportDialog.java [OK]
+│           ├── MainFrame.java [OK]
+│           └── panels/
+│               ├── FiltersPanel.java [OK]
+│               ├── TaskEditorDialog.java [OK]
+│               └── TaskListPanel.java [OK]
 ├── docs/
 │   ├── Java_Style_and_doc_guideline.md [OK]
 │   ├── Patterns_Implementation.txt [OK]
 │   ├── Project_TODO.md [OK]
 │   ├── Requirements.md [OK]
 │   └── project_tree.txt [EMPTY]
+├── exclude-ui.bat [OK]
 ├── lib/
 │   ├── derby.jar [OK]
 │   ├── derbyshared.jar [OK]
 │   ├── derbytools.jar [OK]
 │   └── flatlaf-3.6.jar [OK]
+├── restore-ui.bat [OK]
 ├── screenshots/
 │   ├── Add_Task_dialog.PNG [OK]
 │   ├── Another_Task_added.PNG [OK]
@@ -25,6 +38,7 @@ Task_Management_Appliction/
 │   └── main_view_empty.PNG [OK]
 └── src/
     └── taskmanagement/
+        ├── TestAPI.java [OK]
         ├── app/
         │   └── App.java [OK]
         ├── application/
@@ -34,6 +48,7 @@ Task_Management_Appliction/
         │       ├── commands/
         │       │   ├── AddTaskCommand.java [OK]
         │       │   ├── Command.java [OK]
+        │       │   ├── CommandException.java [OK]
         │       │   ├── CommandStack.java [OK]
         │       │   ├── DeleteTaskCommand.java [OK]
         │       │   ├── MarkStateCommand.java [OK]
@@ -81,12 +96,32 @@ Task_Management_Appliction/
         │       ├── DerbyConfig.java [OK]
         │       └── EmbeddedDerbyTasksDAO.java [OK]
         └── ui/
-            ├── UITheme.java [OK]
-            └── views/
-                ├── AboutDialog.java [OK]
-                ├── ExportDialog.java [OK]
-                ├── MainFrame.java [OK]
-                └── panels/
-                    ├── FiltersPanel.java [OK]
-                    ├── TaskEditorDialog.java [OK]
-                    └── TaskListPanel.java [OK]
+            ├── MainFrame.java [OK]
+            ├── TasksViewAPI.java [OK]
+            ├── ViewModelException.java [OK]
+            ├── chrome/
+            │   └── WindowChrome.java [OK]
+            ├── dialogs/
+            │   ├── AboutDialog.java [OK]
+            │   ├── ConfirmExitDialog.java [OK]
+            │   ├── ExportDialog.java [OK]
+            │   └── TaskEditorDialog.java [OK]
+            ├── resources/
+            │   ├── add.png [OK]
+            │   ├── delete.png [OK]
+            │   ├── download.png [OK]
+            │   ├── edit.png [OK]
+            │   ├── exit.png [OK]
+            │   └── information.png [OK]
+            ├── styles/
+            │   └── AppTheme.java [OK]
+            ├── util/
+            │   ├── RoundedPanel.java [OK]
+            │   └── UiUtils.java [OK]
+            ├── views/
+            │   └── ContentArea.java [OK]
+            └── widgets/
+                ├── ControlPanel.java [OK]
+                ├── HeaderBar.java [OK]
+                ├── TasksPanel.java [OK]
+                └── ToolBox.java [OK]

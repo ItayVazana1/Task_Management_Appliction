@@ -1,6 +1,6 @@
-package ui_test.chrome;
+package taskmanagement.ui.chrome;
 
-import ui_test.styles.AppTheme;
+import taskmanagement.ui.styles.AppTheme;
 
 import javax.swing.*;
 import java.awt.*;

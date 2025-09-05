@@ -12,18 +12,26 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * EmbeddedDerbyTasksDAO
- * ---------------------
+ * {@code EmbeddedDerbyTasksDAO}
+ * <br/>
  * ITasksDAO implementation over embedded Apache Derby.
- * - Pure persistence (no UI).
- * - Honors the DAO contract: never returns null for "not found" → throws TasksDAOException.
- * - Uses a single bootstrapped Connection (Singleton DAO instance).
+ * <ul>
+ *   <li>Pure persistence (no UI / no ViewModel logic).</li>
+ *   <li>Honors the DAO contract — never returns {@code null} for "not found":
+ *       throws {@link TasksDAOException} instead.</li>
+ *   <li>Singleton instance with a single bootstrapped {@link Connection}.</li>
+ * </ul>
  */
 public final class EmbeddedDerbyTasksDAO implements ITasksDAO {
 
     /* ===== Singleton ===== */
     private static EmbeddedDerbyTasksDAO instance;
 
+    /**
+     * Returns the single DAO instance (Singleton).
+     *
+     * @return the singleton instance
+     */
     public static synchronized EmbeddedDerbyTasksDAO getInstance() {
         if (instance == null) {
             instance = new EmbeddedDerbyTasksDAO();
@@ -34,16 +42,21 @@ public final class EmbeddedDerbyTasksDAO implements ITasksDAO {
     /* ===== State ===== */
     private final Connection conn;
 
-    private EmbeddedDerbyTasksDAO() {
+    /**
+     * Boots Derby and ensures schema is present (tables, indexes).
+     * Package-private by design — use {@link #getInstance()}.
+     */
+    EmbeddedDerbyTasksDAO() {
         this.conn = DerbyBootstrap.bootAndEnsureSchema();
     }
 
     /* ===== ITasksDAO ===== */
 
+    /** {@inheritDoc} */
     @Override
     public ITask[] getTasks() throws TasksDAOException {
-        final String sql = "SELECT id, title, description, state FROM " + DerbyConfig.TABLE_TASKS + " ORDER BY id";
-        List<ITask> list = new ArrayList<>();
+        final String sql = "SELECT id, title, description, state FROM TASKS ORDER BY id";
+        final List<ITask> list = new ArrayList<>();
         try (PreparedStatement ps = conn.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
@@ -55,9 +68,10 @@ public final class EmbeddedDerbyTasksDAO implements ITasksDAO {
         }
     }
 
+    /** {@inheritDoc} */
     @Override
     public ITask getTask(int id) throws TasksDAOException {
-        final String sql = "SELECT id, title, description, state FROM " + DerbyConfig.TABLE_TASKS + " WHERE id=?";
+        final String sql = "SELECT id, title, description, state FROM TASKS WHERE id=?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
             try (ResultSet rs = ps.executeQuery()) {
@@ -71,15 +85,16 @@ public final class EmbeddedDerbyTasksDAO implements ITasksDAO {
         }
     }
 
+    /** {@inheritDoc} */
     @Override
     public void addTask(ITask task) throws TasksDAOException {
-        final String sql = "INSERT INTO " + DerbyConfig.TABLE_TASKS + " (id, title, description, state) VALUES (?, ?, ?, ?)";
+        final String sql = "INSERT INTO TASKS (id, title, description, state) VALUES (?, ?, ?, ?)";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
 
-            // Minimal fix: if the caller passed id<=0, allocate the next id from DB.
+            // If caller passed id<=0, allocate the next id from DB.
             int idToInsert = task.getId();
             if (idToInsert <= 0) {
-                idToInsert = nextId(); // uses the same single connection
+                idToInsert = nextId();
             }
 
             ps.setInt(1, idToInsert);
@@ -97,15 +112,16 @@ public final class EmbeddedDerbyTasksDAO implements ITasksDAO {
         }
     }
 
+    /** {@inheritDoc} */
     @Override
     public void updateTask(ITask task) throws TasksDAOException {
-        final String sql = "UPDATE " + DerbyConfig.TABLE_TASKS + " SET title=?, description=?, state=? WHERE id=?";
+        final String sql = "UPDATE TASKS SET title=?, description=?, state=? WHERE id=?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, task.getTitle());
             ps.setString(2, task.getDescription());
             ps.setString(3, task.getState().name());
             ps.setInt(4, task.getId());
-            int updated = ps.executeUpdate();
+            final int updated = ps.executeUpdate();
             if (updated == 0) {
                 throw new TasksDAOException("Cannot update, task not found: id=" + task.getId());
             }
@@ -114,9 +130,14 @@ public final class EmbeddedDerbyTasksDAO implements ITasksDAO {
         }
     }
 
+    /**
+     * Deletes all tasks from the table.
+     *
+     * @throws TasksDAOException if the operation fails
+     */
     @Override
     public void deleteTasks() throws TasksDAOException {
-        final String sql = "DELETE FROM " + DerbyConfig.TABLE_TASKS;
+        final String sql = "DELETE FROM TASKS";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.executeUpdate();
         } catch (SQLException e) {
@@ -124,12 +145,13 @@ public final class EmbeddedDerbyTasksDAO implements ITasksDAO {
         }
     }
 
+    /** {@inheritDoc} */
     @Override
     public void deleteTask(int id) throws TasksDAOException {
-        final String sql = "DELETE FROM " + DerbyConfig.TABLE_TASKS + " WHERE id=?";
+        final String sql = "DELETE FROM TASKS WHERE id=?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
-            int deleted = ps.executeUpdate();
+            final int deleted = ps.executeUpdate();
             if (deleted == 0) {
                 throw new TasksDAOException("Cannot delete, task not found: id=" + id);
             }
@@ -140,25 +162,17 @@ public final class EmbeddedDerbyTasksDAO implements ITasksDAO {
 
     /* ===== Helpers ===== */
 
-    /**
-     * Maps current ResultSet row to a validated Task.
-     * May throw ValidationException if DB contains invalid data.
-     */
     private Task mapRow(ResultSet rs) throws SQLException, ValidationException {
-        int id = rs.getInt("id");
-        String title = rs.getString("title");
-        String description = rs.getString("description");
-        String stateStr = rs.getString("state");
-        TaskState state = TaskState.valueOf(stateStr);
+        final int id = rs.getInt("id");
+        final String title = rs.getString("title");
+        final String description = rs.getString("description");
+        final String stateStr = rs.getString("state");
+        final TaskState state = TaskState.valueOf(stateStr);
         return new Task(id, title, description, state);
     }
 
-    /**
-     * Computes the next available ID from the current table contents.
-     * Keeps the existing schema (no IDENTITY column) and avoids duplicate-key on id=0.
-     */
     private int nextId() throws SQLException {
-        final String sql = "SELECT COALESCE(MAX(id), -1) + 1 FROM " + DerbyConfig.TABLE_TASKS;
+        final String sql = "SELECT COALESCE(MAX(id), -1) + 1 FROM TASKS";
         try (Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery(sql)) {
             rs.next();

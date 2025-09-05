@@ -1,43 +1,41 @@
 package taskmanagement.application.viewmodel.commands;
 
 import taskmanagement.domain.ITask;
-import taskmanagement.persistence.DAOProvider;
 import taskmanagement.persistence.ITasksDAO;
 import taskmanagement.persistence.TasksDAOException;
 
 /**
- * Adds a task; undo removes it.
+ * Command: add a task. Undo removes the created row by its id.
  */
 public final class AddTaskCommand implements Command {
 
-    private final ITask task;
-    private Integer createdId;
+    private final ITasksDAO dao;
+    private final ITask taskToAdd;
+    private Integer createdId; // set after execute()
 
     /**
-     * @param task task to add
+     * @param dao       tasks DAO
+     * @param taskToAdd task instance to persist (validated by domain model)
      */
-    public AddTaskCommand(ITask task) {
-        this.task = task;
+    public AddTaskCommand(ITasksDAO dao, ITask taskToAdd) {
+        this.dao = dao;
+        this.taskToAdd = taskToAdd;
     }
 
     @Override
-    public String name() {
-        return "Add Task";
-    }
+    public String name() { return "Add Task"; }
 
     @Override
     public void execute() throws TasksDAOException {
-        ITasksDAO dao = DAOProvider.get();
-        dao.addTask(task);
-        createdId = task.getId();
+        dao.addTask(taskToAdd);
+        // if DAO assigns id during insert, it must reflect into taskToAdd.getId()
+        createdId = taskToAdd.getId();
     }
 
     @Override
     public void undo() throws TasksDAOException {
-        if (createdId == null) {
-            return;
+        if (createdId != null) {
+            dao.deleteTask(createdId);
         }
-        ITasksDAO dao = DAOProvider.get();
-        dao.deleteTask(createdId);
     }
 }

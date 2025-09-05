@@ -1,4 +1,4 @@
-package ui_test.util;
+package taskmanagement.ui.util;
 
 import javax.swing.*;
 import java.awt.*;
