@@ -23,6 +23,12 @@ import java.util.Objects;
  * Rows are built from either filtered or full list (auto-picked).
  * We subscribe to BOTH properties to avoid missed updates when ViewModel
  * only notifies one side (filtered/all) or reuses list instances.
+ *
+ * <p>Selection:
+ * Each row has a checkbox that toggles the task selection. The current
+ * selection is exposed via {@link #selectedIdsProperty()} for observers
+ * (e.g., ToolBox counters and actions) and via the compatibility getter
+ * {@link #getSelectedIds()} used by existing wiring.</p>
  */
 public final class TasksPanel extends JPanel {
 
@@ -93,9 +99,12 @@ public final class TasksPanel extends JPanel {
 
     private TasksViewAPI api;
 
-    /** Strong refs to listeners (avoid GC & missing updates). */
+    /** Strong refs to listeners (avoid GC & missed updates). */
     private Property.Listener<List<ITask>> tasksListener;
     private Property.Listener<List<ITask>> filteredListener;
+
+    /** Observable property containing the currently selected task IDs (never null). */
+    private final Property<int[]> selectedIdsProp = new Property<>(new int[0]);
 
     public TasksPanel() {
         super(new BorderLayout());
@@ -144,7 +153,11 @@ public final class TasksPanel extends JPanel {
     // ---------------------------------------------------------------------
 
     /**
-     * Inject API, paint snapshot on EDT, and subscribe to BOTH properties.
+     * Injects the {@link TasksViewAPI}, renders a snapshot on the EDT, and subscribes
+     * to both all-tasks and filtered-tasks properties so edits are not missed.
+     *
+     * @param api the API to bind to (must not be null)
+     * @throws NullPointerException if api is null
      */
     public void setApi(TasksViewAPI api) {
         this.api = Objects.requireNonNull(api, "api");
@@ -182,16 +195,25 @@ public final class TasksPanel extends JPanel {
         }
     }
 
-    /** Prefer filtered list when non-null, otherwise full list. */
-    private void renderFromApi() {
-        if (api == null) return;
-        List<ITask> filtered = api.filteredTasksProperty().getValue();
-        List<ITask> all      = api.tasksProperty().getValue();
-        List<ITask> toShow   = (filtered != null) ? filtered : all;
-        renderTasks(toShow);
+    /**
+     * @return a live observable property of the currently selected task IDs (never null).
+     */
+    public Property<int[]> selectedIdsProperty() {
+        return selectedIdsProp;
     }
 
-    /** @return IDs of all currently selected tasks. */
+    /**
+     * @return the currently selected task IDs as a defensive copy.
+     */
+    public int[] selectedIds() {
+        int[] v = selectedIdsProp.getValue();
+        return (v == null) ? new int[0] : v.clone();
+    }
+
+    /**
+     * Compatibility method used by existing wiring (ContentArea).
+     * @return list of currently selected task IDs.
+     */
     public List<Integer> getSelectedIds() {
         List<Integer> ids = new ArrayList<>();
         for (Component c : listPanel.getComponents()) {
@@ -210,7 +232,19 @@ public final class TasksPanel extends JPanel {
     // Rendering
     // ---------------------------------------------------------------------
 
+    /** Prefer filtered list when non-null, otherwise full list. */
+    private void renderFromApi() {
+        if (api == null) return;
+        List<ITask> filtered = api.filteredTasksProperty().getValue();
+        List<ITask> all      = api.tasksProperty().getValue();
+        List<ITask> toShow   = (filtered != null) ? filtered : all;
+        renderTasks(toShow);
+    }
+
     private void renderTasks(List<ITask> tasks) {
+        // Keep old selection to restore if possible (by ID).
+        int[] oldSel = selectedIds();
+
         listPanel.removeAll();
         if (tasks != null) {
             for (ITask t : tasks) {
@@ -220,6 +254,22 @@ public final class TasksPanel extends JPanel {
         }
         listPanel.revalidate();
         listPanel.repaint();
+
+        // Restore selection where possible.
+        if (oldSel.length > 0) {
+            for (Component c : listPanel.getComponents()) {
+                if (c instanceof RoundedPanel row) {
+                    JCheckBox chk = (JCheckBox) findByName(row, "row-check");
+                    if (chk != null) {
+                        Integer id = (Integer) chk.getClientProperty("taskId");
+                        if (id != null && contains(oldSel, id)) chk.setSelected(true);
+                    }
+                }
+            }
+        }
+        // Recompute property after redraw.
+        fireSelectionChanged();
+
         SwingUtilities.invokeLater(this::recomputeAndApplyFromHeader);
     }
 
@@ -307,6 +357,8 @@ public final class TasksPanel extends JPanel {
         Dimension cbSize = new Dimension(18, 18);
         chk.setPreferredSize(cbSize);
         chk.setMinimumSize(cbSize);
+        // Update selection property on toggle
+        chk.addActionListener(e -> fireSelectionChanged());
         left.add(chk, new GridBagConstraints());
         gc.gridx = 0; gc.weightx = 0;
         row.add(left, gc);
@@ -513,7 +565,26 @@ public final class TasksPanel extends JPanel {
     }
 
     // ---------------------------------------------------------------------
-    // Helpers
+    // Selection helpers
+    // ---------------------------------------------------------------------
+
+    /** Recomputes the current selection from the visible rows and updates the property. */
+    private void fireSelectionChanged() {
+        List<Integer> ids = getSelectedIds();
+        int[] now = ids.stream().mapToInt(Integer::intValue).toArray();
+        int[] prev = selectedIdsProp.getValue();
+        if (!Arrays.equals(prev, now)) {
+            selectedIdsProp.setValue(now);
+        }
+    }
+
+    private static boolean contains(int[] arr, int id) {
+        for (int v : arr) if (v == id) return true;
+        return false;
+    }
+
+    // ---------------------------------------------------------------------
+    // General helpers
     // ---------------------------------------------------------------------
 
     private static String clipForPreview(String s, int n) {

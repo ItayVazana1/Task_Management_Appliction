@@ -4,13 +4,8 @@ import taskmanagement.ui.styles.AppTheme;
 import taskmanagement.ui.util.UiUtils;
 import taskmanagement.ui.util.RoundedPanel;
 
-import taskmanagement.ui.dialogs.ExportDialog; // kept for backwards compat if you already import it
-
-import taskmanagement.ui.widgets.ToolBox.ExportHandler;
-import taskmanagement.ui.widgets.ToolBox.IdsProvider;
-
-import taskmanagement.application.viewmodel.TasksViewModel;
-import taskmanagement.application.viewmodel.ExportFormat;
+import taskmanagement.domain.ITask;
+import taskmanagement.application.viewmodel.events.Property;
 import taskmanagement.application.viewmodel.sort.SortStrategy;
 
 import taskmanagement.domain.TaskState;
@@ -19,7 +14,7 @@ import taskmanagement.ui.api.TasksViewAPI;
 
 import javax.swing.*;
 import java.awt.*;
-import java.nio.file.Path;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
@@ -27,25 +22,30 @@ import java.util.function.Supplier;
 
 /**
  * ToolBox
- * <p>Right-side vertical toolbox split into six sections (height ratios sum to 100%).</p>
+ * <p>Right-side vertical toolbox split into six sections:</p>
  * <ol>
- *   <li>20% — Undo / Redo (two round mini buttons, centered per half).</li>
- *   <li>20% — Advance / Mark as… (two icon+text buttons, centered per half).</li>
- *   <li>10% — Sort by (top 5%: label+combo; bottom 5%: Apply / Reset).</li>
- *   <li>30% — Filter (three checkboxes) + row of Apply / Reset / Show Filtered.</li>
- *   <li>5%  — Counters: Selected / Total (two equal halves).</li>
- *   <li>15% — Export (primary button centered).</li>
+ *   <li>20% — Undo / Redo</li>
+ *   <li>20% — Advance / Mark as…</li>
+ *   <li>10% — Sort (combo + Apply / Reset)</li>
+ *   <li>30% — Filter (checkboxes) + Apply / Reset / Show Filtered</li>
+ *   <li>5%  — Counters: Selected / Total</li>
+ *   <li>15% — Export</li>
  * </ol>
- * <p>
- * Default behavior wires placeholders. Call {@link #wireTo(TasksViewAPI, IdsProvider, Function, Supplier, ExportHandler)}
- * to bind actual VM operations without leaking model/DAO into the UI.
- * </p>
+ *
+ * <h3>Wiring</h3>
+ * <ul>
+ *   <li>Use {@link #wireTo(TasksViewAPI, IdsProvider, Function, Supplier, ExportHandler, Property)}
+ *   to fully bind actions + counters in one shot.</li>
+ *   <li>Or use incremental setters: {@link #setApi(TasksViewAPI)}, {@link #setIdsProvider(IdsProvider)},
+ *   {@link #setSortMapper(Function)}, {@link #setFilterSupplier(Supplier)},
+ *   {@link #setExportHandler(ExportHandler)}, {@link #bindSelectionProperty(Property)}.</li>
+ * </ul>
+ *
+ * <p>View-only: no direct access to Model/DAO; calls are delegated to {@link TasksViewAPI}.</p>
  */
 public final class ToolBox extends RoundedPanel {
 
-    /** Internal padding (px) to keep content away from rounded edges. */
     private static final int INNER_PAD = 12;
-    /** Fallback width to avoid clipping the three-button filter row. */
     private static final int FALLBACK_WIDTH = 360;
 
     // === Section 1: Undo/Redo ===
@@ -78,34 +78,36 @@ public final class ToolBox extends RoundedPanel {
     // === Section 6: Export ===
     private JButton exportBtn; // created in buildSection6()
 
-    // ---- Binding state (optional) ----
-    private TasksViewAPI api; // set by wireTo(...)
-    private IdsProvider idsProvider; // set by wireTo(...)
-    private Function<String, SortStrategy> sortMapper; // set by wireTo(...)
-    private Supplier<ITaskFilter> filterSupplier; // set by wireTo(...)
-    private ExportHandler exportHandler; // set by wireTo(...)
+    // ---- Binding state ----
+    private TasksViewAPI api;
+    private IdsProvider idsProvider;
+    private Function<String, SortStrategy> sortMapper;
+    private Supplier<ITaskFilter> filterSupplier;
+    private ExportHandler exportHandler;
+    private Property<int[]> selectionProp; // for counters
+
+    // Keep listeners to avoid GC (when bound via properties)
+    private Property.Listener<List<ITask>> tasksListener;
+    private Property.Listener<int[]>       selectionListener;
+    private Property.Listener<List<ITask>> filteredListener;
 
     /** Constructs the toolbox panel with the 6-section layout. */
     public ToolBox() {
         super(AppTheme.PANEL_BG, AppTheme.TB_CORNER_RADIUS);
         setOpaque(false);
 
-        // Width lock (preferred == minimum).
         int fixedWidth = Math.max(FALLBACK_WIDTH, AppTheme.TB_EXPORT_W + INNER_PAD * 2);
         Dimension fixed = new Dimension(fixedWidth, 10);
         setPreferredSize(fixed);
         setMinimumSize(fixed);
 
-        // Inner padding.
         setBorder(BorderFactory.createEmptyBorder(INNER_PAD, INNER_PAD, INNER_PAD, INNER_PAD));
 
-        // Root layout: 6 rows with explicit weight ratios (sum = 1.0).
         setLayout(new GridBagLayout());
         GridBagConstraints root = new GridBagConstraints();
         root.gridx = 0;
         root.fill = GridBagConstraints.BOTH;
         root.weightx = 1.0;
-        root.insets = new Insets(0, 0, 0, 0);
 
         // 1) Undo/Redo — 20%
         root.gridy = 0; root.weighty = 0.20;
@@ -131,48 +133,29 @@ public final class ToolBox extends RoundedPanel {
         root.gridy = 5; root.weighty = 0.15;
         add(buildSection6_Export(), root);
 
-        // Default placeholders (no API bound yet).
         wirePlaceholders();
     }
 
-    // ---------------------------------------------------------------------
-    // Section builders
-    // ---------------------------------------------------------------------
+    // ---------- Section builders ----------
 
-    /** Builds section 1 (Undo/Redo) with two centered mini buttons. */
     private JPanel buildSection1_UndoRedo() {
         JPanel p = makeTransparent();
         p.setLayout(new GridLayout(1, 2, AppTheme.TB_GAP_SM, 0));
 
-        JPanel left  = makeTransparent();
-        JPanel right = makeTransparent();
-        left.setLayout(new GridBagLayout());
-        right.setLayout(new GridBagLayout());
+        JPanel left  = centerInGridBag(undoBtn);
+        JPanel right = centerInGridBag(redoBtn);
 
         styleMiniRound(undoBtn, AppTheme.TB_UNDO_BG, AppTheme.TB_UNDO_FG);
         styleMiniRound(redoBtn, AppTheme.TB_REDO_BG, AppTheme.TB_REDO_FG);
-        undoBtn.setToolTipText("Undo last action");
-        redoBtn.setToolTipText("Redo last undone action");
-
-        GridBagConstraints c = new GridBagConstraints();
-        c.anchor = GridBagConstraints.CENTER;
-        left.add(undoBtn, c);
-        right.add(redoBtn, c);
 
         p.add(left);
         p.add(right);
         return p;
     }
 
-    /** Builds section 2 (Advance / Mark as…) with two centered icon+text buttons. */
     private JPanel buildSection2_AdvanceMark() {
         JPanel p = makeTransparent();
         p.setLayout(new GridLayout(1, 2, AppTheme.TB_GAP_SM, 0));
-
-        JPanel left  = makeTransparent();
-        JPanel right = makeTransparent();
-        left.setLayout(new GridBagLayout());
-        right.setLayout(new GridBagLayout());
 
         Icon advIcon = safeIcon(UiUtils.loadRasterIcon(
                 "/taskmanagement/ui/resources/advance.png",
@@ -184,20 +167,11 @@ public final class ToolBox extends RoundedPanel {
         styleIconTextButton(advanceBtn, advIcon, AppTheme.TB_ADVANCE_BG, AppTheme.TB_ADVANCE_FG);
         styleIconTextButton(markAsBtn,  markIcon, AppTheme.TB_MARK_BG,    AppTheme.TB_MARK_FG);
 
-        advanceBtn.setToolTipText("Advance selected task(s) to next state");
-        markAsBtn.setToolTipText("Mark selected task(s) to a specific state");
-
-        GridBagConstraints c = new GridBagConstraints();
-        c.anchor = GridBagConstraints.CENTER;
-        left.add(advanceBtn, c);
-        right.add(markAsBtn, c);
-
-        p.add(left);
-        p.add(right);
+        p.add(centerInGridBag(advanceBtn));
+        p.add(centerInGridBag(markAsBtn));
         return p;
     }
 
-    /** Builds section 3 (Sort) with label+combo and Apply/Reset row. */
     private JPanel buildSection3_Sort() {
         JPanel p = makeTransparent();
         p.setLayout(new GridBagLayout());
@@ -205,7 +179,6 @@ public final class ToolBox extends RoundedPanel {
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.gridx = 0; gbc.weightx = 1.0; gbc.fill = GridBagConstraints.HORIZONTAL;
 
-        // Top half: "Sort by" + combo
         JPanel top = makeTransparent();
         top.setLayout(new GridBagLayout());
         JLabel sortLbl = new JLabel("Sort by");
@@ -222,12 +195,10 @@ public final class ToolBox extends RoundedPanel {
         gbc.gridy = 0; gbc.weighty = 0.5;
         p.add(top, gbc);
 
-        // Bottom half: Apply / Reset
         JPanel bottom = makeTransparent();
         bottom.setLayout(new GridLayout(1, 2, AppTheme.TB_GAP_SM, 0));
         styleSmallFilled(sortApplyBtn, AppTheme.TB_SORT_APPLY_BG, AppTheme.TB_SORT_APPLY_FG);
         styleSmallFilled(sortResetBtn, AppTheme.TB_SORT_RESET_BG, AppTheme.TB_SORT_RESET_FG);
-
         bottom.add(sortApplyBtn);
         bottom.add(sortResetBtn);
 
@@ -237,7 +208,6 @@ public final class ToolBox extends RoundedPanel {
         return p;
     }
 
-    /** Builds section 4 (Filter) with three checkboxes and Apply/Reset/Show Filtered row. */
     private JPanel buildSection4_Filter() {
         JPanel p = makeTransparent();
         p.setLayout(new GridBagLayout());
@@ -245,7 +215,6 @@ public final class ToolBox extends RoundedPanel {
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.gridx = 0; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0;
 
-        // Checkbox list
         JPanel list = makeTransparent();
         list.setLayout(new GridBagLayout());
 
@@ -263,9 +232,8 @@ public final class ToolBox extends RoundedPanel {
         gbc.gridy = 0; gbc.weighty = 0.7;
         p.add(list, gbc);
 
-        // Buttons row (equal spacing for 3 buttons)
         JPanel row = makeTransparent();
-        row.setLayout(new GridLayout(1, 3, 2, 0)); // 2px horizontal gap
+        row.setLayout(new GridLayout(1, 3, 2, 0));
 
         styleSmallFilled(filterApplyBtn, AppTheme.TB_FILTER_APPLY_BG, AppTheme.TB_FILTER_APPLY_FG);
         styleSmallFilled(filterResetBtn, AppTheme.TB_FILTER_RESET_BG, AppTheme.TB_FILTER_RESET_FG);
@@ -278,10 +246,6 @@ public final class ToolBox extends RoundedPanel {
         filterResetBtn.setPreferredSize(smallBtn);
         showFilteredTgl.setPreferredSize(smallBtn);
 
-        filterApplyBtn.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        filterResetBtn.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        showFilteredTgl.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-
         row.add(filterApplyBtn);
         row.add(filterResetBtn);
         row.add(showFilteredTgl);
@@ -292,7 +256,6 @@ public final class ToolBox extends RoundedPanel {
         return p;
     }
 
-    /** Builds section 5 (Counters) with two equal halves: Selected / Total. */
     private JPanel buildSection5_Counters() {
         JPanel p = makeTransparent();
         p.setLayout(new GridLayout(1, 2, AppTheme.TB_GAP_SM, 0));
@@ -305,7 +268,6 @@ public final class ToolBox extends RoundedPanel {
         return p;
     }
 
-    /** Builds section 6 (Export) with a centered primary export button. */
     private JPanel buildSection6_Export() {
         JPanel p = makeTransparent();
         p.setLayout(new GridBagLayout());
@@ -333,157 +295,312 @@ public final class ToolBox extends RoundedPanel {
         return p;
     }
 
-    // ---------------------------------------------------------------------
-    // Wiring (placeholders by default, real VM via wireTo(...))
-    // ---------------------------------------------------------------------
+    // ---------- Wiring ----------
 
-    /** Default placeholder wiring (kept for backward compatibility). */
     private void wirePlaceholders() {
-        undoBtn.addActionListener(e ->
-                JOptionPane.showMessageDialog(this, "Undo (placeholder)", "Undo", JOptionPane.INFORMATION_MESSAGE));
-        redoBtn.addActionListener(e ->
-                JOptionPane.showMessageDialog(this, "Redo (placeholder)", "Redo", JOptionPane.INFORMATION_MESSAGE));
+        undoBtn.addActionListener(e -> JOptionPane.showMessageDialog(this,"Undo (placeholder)","Undo",JOptionPane.INFORMATION_MESSAGE));
+        redoBtn.addActionListener(e -> JOptionPane.showMessageDialog(this,"Redo (placeholder)","Redo",JOptionPane.INFORMATION_MESSAGE));
+        advanceBtn.addActionListener(e -> JOptionPane.showMessageDialog(this,"Advance (placeholder)","Advance",JOptionPane.INFORMATION_MESSAGE));
+        markAsBtn.addActionListener(e -> JOptionPane.showMessageDialog(this,"Mark as… (placeholder)","Mark",JOptionPane.INFORMATION_MESSAGE));
 
-        advanceBtn.addActionListener(e ->
-                JOptionPane.showMessageDialog(this, "Advance (placeholder)", "Advance", JOptionPane.INFORMATION_MESSAGE));
-        markAsBtn.addActionListener(e ->
-                JOptionPane.showMessageDialog(this, "Mark as… (placeholder)", "Mark as…", JOptionPane.INFORMATION_MESSAGE));
+        sortApplyBtn.addActionListener(e -> JOptionPane.showMessageDialog(this,"Sort Apply (placeholder)","Sort",JOptionPane.INFORMATION_MESSAGE));
+        sortResetBtn.addActionListener(e -> JOptionPane.showMessageDialog(this,"Sort Reset (placeholder)","Sort",JOptionPane.INFORMATION_MESSAGE));
 
-        sortApplyBtn.addActionListener(e ->
-                JOptionPane.showMessageDialog(this, "Sort Apply (placeholder)", "Sort", JOptionPane.INFORMATION_MESSAGE));
-        sortResetBtn.addActionListener(e ->
-                JOptionPane.showMessageDialog(this, "Sort Reset (placeholder)", "Sort", JOptionPane.INFORMATION_MESSAGE));
-
-        filterApplyBtn.addActionListener(e ->
-                JOptionPane.showMessageDialog(this, "Filter Apply (placeholder)", "Filter", JOptionPane.INFORMATION_MESSAGE));
-        filterResetBtn.addActionListener(e ->
-                JOptionPane.showMessageDialog(this, "Filter Reset (placeholder)", "Filter", JOptionPane.INFORMATION_MESSAGE));
-        showFilteredTgl.addActionListener(e -> {
-            boolean on = showFilteredTgl.isSelected();
-            showFilteredTgl.setOpaque(on);
-            showFilteredTgl.setBackground(on ? AppTheme.TB_SHOW_SELECTED_BG : new Color(0, 0, 0, 0));
-            showFilteredTgl.setForeground(on ? AppTheme.TB_SHOW_SELECTED_FG : AppTheme.TB_SHOW_FG);
-            JOptionPane.showMessageDialog(this,
-                    (on ? "Show Filtered: ON" : "Show Filtered: OFF"),
-                    "Filter", JOptionPane.INFORMATION_MESSAGE);
-        });
+        filterApplyBtn.addActionListener(e -> JOptionPane.showMessageDialog(this,"Filter Apply (placeholder)","Filter",JOptionPane.INFORMATION_MESSAGE));
+        filterResetBtn.addActionListener(e -> JOptionPane.showMessageDialog(this,"Filter Reset (placeholder)","Filter",JOptionPane.INFORMATION_MESSAGE));
+        showFilteredTgl.addActionListener(e -> updateTotalsFromApi()); // will only work once API is set
 
         if (exportBtn != null) {
-            exportBtn.addActionListener(e -> onExportPlaceholder());
+            exportBtn.addActionListener(e ->
+                    JOptionPane.showMessageDialog(this,"Export (placeholder). Use wireTo(...) to connect.","Export",JOptionPane.INFORMATION_MESSAGE));
         }
     }
 
     /**
-     * Binds this ToolBox to the provided API and UI-side providers without guessing any implementation detail.
-     * After calling this method, all buttons call the real VM operations instead of placeholders.
-     *
-     * @param api             UI-exposed API adapter for the ViewModel
-     * @param idsProvider     supplier for currently selected task IDs and counters
-     * @param sortMapper      maps combo selection ("", "Title", "State", "ID") to a SortStrategy (null clears)
-     * @param filterSupplier  builds the current combinator filter (null clears)
-     * @param exportHandler   handles the export interaction (dialog + api calls)
+     * Full binding (actions + counters) in one call.
      */
     public void wireTo(TasksViewAPI api,
                        IdsProvider idsProvider,
                        Function<String, SortStrategy> sortMapper,
                        Supplier<ITaskFilter> filterSupplier,
-                       ExportHandler exportHandler) {
+                       ExportHandler exportHandler,
+                       Property<int[]> selectionProperty) {
 
+        setApi(api);
+        setIdsProvider(idsProvider);
+        setSortMapper(sortMapper);
+        setFilterSupplier(filterSupplier);
+        setExportHandler(exportHandler);
+        bindSelectionProperty(selectionProperty);
+        bindTotalsFromApi();
+        bindAdvanceAndMarkDialogs();
+    }
+
+    /**
+     * Minimal safe wiring for existing code that calls setApi(api) only.
+     * Binds Undo/Redo and Reset buttons; other actions remain placeholders until more setters are provided.
+     */
+    public void setApi(TasksViewAPI api) {
         this.api = Objects.requireNonNull(api, "api");
-        this.idsProvider = Objects.requireNonNull(idsProvider, "idsProvider");
-        this.sortMapper = Objects.requireNonNull(sortMapper, "sortMapper");
-        this.filterSupplier = Objects.requireNonNull(filterSupplier, "filterSupplier");
-        this.exportHandler = Objects.requireNonNull(exportHandler, "exportHandler");
 
-        // Clear previous listeners (keep it simple by replacing ActionListeners)
+        // Clear & bind only safe ops
         for (var l : undoBtn.getActionListeners()) undoBtn.removeActionListener(l);
         for (var l : redoBtn.getActionListeners()) redoBtn.removeActionListener(l);
-        for (var l : advanceBtn.getActionListeners()) advanceBtn.removeActionListener(l);
-        for (var l : markAsBtn.getActionListeners()) markAsBtn.removeActionListener(l);
-        for (var l : sortApplyBtn.getActionListeners()) sortApplyBtn.removeActionListener(l);
         for (var l : sortResetBtn.getActionListeners()) sortResetBtn.removeActionListener(l);
-        for (var l : filterApplyBtn.getActionListeners()) filterApplyBtn.removeActionListener(l);
         for (var l : filterResetBtn.getActionListeners()) filterResetBtn.removeActionListener(l);
-        for (var l : showFilteredTgl.getActionListeners()) showFilteredTgl.removeActionListener(l);
-        if (exportBtn != null) for (var l : exportBtn.getActionListeners()) exportBtn.removeActionListener(l);
 
-        // ---- Core ops ----
         undoBtn.addActionListener(e -> this.api.undo());
         redoBtn.addActionListener(e -> this.api.redo());
 
-        advanceBtn.addActionListener(e -> {
-            int[] ids = safeIds();
-            for (int id : ids) this.api.advanceState(id);
-        });
-
-        markAsBtn.addActionListener(e -> showMarkPopup());
-
-        // ---- Sorting ----
-        sortApplyBtn.addActionListener(e -> {
-            String key = Optional.ofNullable((String) sortCombo.getSelectedItem()).orElse("");
-            this.api.setSortStrategy(this.sortMapper.apply(key));
-        });
         sortResetBtn.addActionListener(e -> {
             sortCombo.setSelectedIndex(0);
             this.api.setSortStrategy(null);
         });
 
-        // ---- Filtering ----
-        filterApplyBtn.addActionListener(e -> this.api.setFilter(this.filterSupplier.get()));
         filterResetBtn.addActionListener(e -> {
             cbTodo.setSelected(false);
             cbInProgress.setSelected(false);
             cbCompleted.setSelected(false);
             this.api.clearFilter();
-        });
-        showFilteredTgl.addActionListener(e -> {
-            boolean on = showFilteredTgl.isSelected();
-            showFilteredTgl.setOpaque(on);
-            showFilteredTgl.setBackground(on ? AppTheme.TB_SHOW_SELECTED_BG : new Color(0, 0, 0, 0));
-            showFilteredTgl.setForeground(on ? AppTheme.TB_SHOW_SELECTED_FG : AppTheme.TB_SHOW_FG);
-            // Consumers of this toggle should read its state via getter when executing actions.
-            // No API call is made here by design.
+            updateTotalsFromApi();
         });
 
-        // ---- Export ----
+        // keep placeholders for the rest until fully wired
+    }
+
+    public void setIdsProvider(IdsProvider idsProvider) {
+        this.idsProvider = Objects.requireNonNull(idsProvider, "idsProvider");
+        updateSelectionCount(); // initial
+        enableActionButtons();
+    }
+
+    public void setSortMapper(Function<String, SortStrategy> sortMapper) {
+        this.sortMapper = Objects.requireNonNull(sortMapper, "sortMapper");
+        for (var l : sortApplyBtn.getActionListeners()) sortApplyBtn.removeActionListener(l);
+        sortApplyBtn.addActionListener(e -> {
+            String key = Optional.ofNullable((String) sortCombo.getSelectedItem()).orElse("");
+            this.api.setSortStrategy(this.sortMapper.apply(key));
+        });
+    }
+
+    public void setFilterSupplier(Supplier<ITaskFilter> filterSupplier) {
+        this.filterSupplier = Objects.requireNonNull(filterSupplier, "filterSupplier");
+        for (var l : filterApplyBtn.getActionListeners()) filterApplyBtn.removeActionListener(l);
+        filterApplyBtn.addActionListener(e -> {
+            this.api.setFilter(this.filterSupplier.get());
+            updateTotalsFromApi();
+        });
+    }
+
+    public void setExportHandler(ExportHandler exportHandler) {
+        this.exportHandler = Objects.requireNonNull(exportHandler, "exportHandler");
         if (exportBtn != null) {
-            exportBtn.addActionListener(e -> this.exportHandler.performExport(
-                    this.api,
-                    showFilteredTgl.isSelected(),
-                    safeIds()
-            ));
+            for (var l : exportBtn.getActionListeners()) exportBtn.removeActionListener(l);
+            exportBtn.addActionListener(e ->
+                    this.exportHandler.performExport(this.api, showFilteredTgl.isSelected(), safeIds()));
         }
     }
 
-    /** Shows a simple popup to select target TaskState, then calls api.markState for each selected id. */
-    private void showMarkPopup() {
-        if (api == null) return; // not bound
-        JPopupMenu menu = new JPopupMenu();
-        for (TaskState s : TaskState.values()) {
-            JMenuItem mi = new JMenuItem(s.name());
-            mi.addActionListener(e2 -> {
-                int[] ids = safeIds();
-                for (int id : ids) api.markState(id, s);
-            });
-            menu.add(mi);
+    /**
+     * Binds the selection property for counters and button enablement.
+     */
+    public void bindSelectionProperty(Property<int[]> selectionProperty) {
+        this.selectionProp = Objects.requireNonNull(selectionProperty, "selectionProperty");
+
+        if (selectionListener != null) {
+            this.selectionProp.removeListener(selectionListener);
         }
-        menu.show(markAsBtn, markAsBtn.getWidth() / 2, markAsBtn.getHeight());
+        selectionListener = (oldV, newV) -> {
+            updateSelectionCount();
+            enableActionButtons();
+        };
+        this.selectionProp.addListener(selectionListener);
+
+        updateSelectionCount();
+        enableActionButtons();
     }
 
-    /** Placeholder export when not bound to API (kept for backwards compatibility). */
-    private void onExportPlaceholder() {
-        JOptionPane.showMessageDialog(this,
-                "Export (placeholder). Use wireTo(...) to connect real export flow.",
-                "Export", JOptionPane.INFORMATION_MESSAGE);
+    /**
+     * Subscribes to tasks/filtered properties to keep the Total counter fresh.
+     */
+    public void bindTotalsFromApi() {
+        if (api == null) return;
+
+        if (tasksListener != null)    api.tasksProperty().removeListener(tasksListener);
+        if (filteredListener != null) api.filteredTasksProperty().removeListener(filteredListener);
+
+        tasksListener    = (oldList, newList) -> updateTotalsFromApi();
+        filteredListener = (oldList, newList) -> updateTotalsFromApi();
+
+        api.tasksProperty().addListener(tasksListener);
+        api.filteredTasksProperty().addListener(filteredListener);
+
+        showFilteredTgl.addActionListener(e -> updateTotalsFromApi());
+        updateTotalsFromApi();
+    }
+
+
+    /**
+     * Replace placeholders for Advance/Mark with real actions + dialogs.
+     */
+    public void bindAdvanceAndMarkDialogs() {
+        // Clear current listeners
+        for (var l : advanceBtn.getActionListeners()) advanceBtn.removeActionListener(l);
+        for (var l : markAsBtn.getActionListeners()) markAsBtn.removeActionListener(l);
+
+        advanceBtn.addActionListener(e -> onAdvance());
+        markAsBtn.addActionListener(e -> onMarkAsDialog());
+        enableActionButtons();
+    }
+
+    // ---------- Actions ----------
+
+    private void onAdvance() {
+        int[] ids = safeIds();
+        if (ids.length == 0) {
+            JOptionPane.showMessageDialog(this, "No tasks selected.", "Advance", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        int rc = JOptionPane.showConfirmDialog(
+                this,
+                "Advance " + ids.length + " selected task(s) to the next state?",
+                "Confirm Advance",
+                JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.QUESTION_MESSAGE
+        );
+        if (rc != JOptionPane.OK_OPTION) return;
+
+        for (int id : ids) api.advanceState(id);
+        // VM should fire rows property; as a fallback you may call api.reload() if needed.
+    }
+
+    private void onMarkAsDialog() {
+        int[] ids = safeIds();
+        if (ids.length == 0) {
+            JOptionPane.showMessageDialog(this, "No tasks selected.", "Mark as…", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        // Dialog UI
+        final JDialog dlg = new JDialog(SwingUtilities.getWindowAncestor(this), "Mark as…", Dialog.ModalityType.APPLICATION_MODAL);
+        dlg.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+        JPanel content = new JPanel(new GridBagLayout());
+        content.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+        content.setBackground(getBackground());
+
+        ButtonGroup bg = new ButtonGroup();
+        JRadioButton rbTodo = new JRadioButton("To-Do");
+        JRadioButton rbInPr = new JRadioButton("In-Progress");
+        JRadioButton rbDone = new JRadioButton("Completed");
+        rbTodo.setOpaque(false); rbInPr.setOpaque(false); rbDone.setOpaque(false);
+        rbTodo.setSelected(true);
+        bg.add(rbTodo); bg.add(rbInPr); bg.add(rbDone);
+
+        JButton ok = new JButton("OK");
+        JButton cancel = new JButton("Cancel");
+
+        GridBagConstraints g = new GridBagConstraints();
+        g.gridx = 0; g.gridy = 0; g.anchor = GridBagConstraints.WEST; g.insets = new Insets(4,4,4,4);
+        content.add(new JLabel("Set state for " + ids.length + " selected task(s):"), g);
+        g.gridy++; content.add(rbTodo, g);
+        g.gridy++; content.add(rbInPr, g);
+        g.gridy++; content.add(rbDone, g);
+
+        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        buttons.setOpaque(false);
+        buttons.add(ok); buttons.add(cancel);
+        g.gridy++; g.anchor = GridBagConstraints.EAST; g.fill = GridBagConstraints.HORIZONTAL; g.weightx = 1.0;
+        content.add(buttons, g);
+
+        ok.addActionListener(ev -> {
+            TaskState target = rbTodo.isSelected() ? TaskState.ToDo :
+                    rbInPr.isSelected() ? TaskState.InProgress : TaskState.Completed;
+
+            boolean warnedBackward = false;
+
+            for (int id : ids) {
+                TaskState current = findCurrentState(id);
+                if (current == null) continue; // task not visible; skip safely
+
+                int curIdx = stateIndex(current);
+                int tgtIdx = stateIndex(target);
+
+                if (tgtIdx == curIdx) {
+                    // nothing to do
+                    continue;
+                } else if (tgtIdx > curIdx) {
+                    // move forward step-by-step using advanceState to respect VM transition rules
+                    for (int step = curIdx; step < tgtIdx; step++) {
+                        try {
+                            api.advanceState(id);
+                        } catch (RuntimeException ex) {
+                            // If VM rejects for some reason, show once and break for this id
+                            JOptionPane.showMessageDialog(this,
+                                    "Failed to advance task #" + id + ": " + ex.getMessage(),
+                                    "Mark as…", JOptionPane.ERROR_MESSAGE);
+                            break;
+                        }
+                    }
+                } else {
+                    // backward not supported by VM — warn once
+                    if (!warnedBackward) {
+                        JOptionPane.showMessageDialog(this,
+                                "Backward transitions are not supported by the current workflow.\n" +
+                                        "Requested: " + current + " → " + target,
+                                "Mark as…", JOptionPane.WARNING_MESSAGE);
+                        warnedBackward = true;
+                    }
+                }
+            }
+
+            dlg.dispose();
+        });
+        cancel.addActionListener(ev -> dlg.dispose());
+
+        dlg.setContentPane(content);
+        dlg.pack();
+        dlg.setLocationRelativeTo(this);
+        dlg.setVisible(true);
+    }
+
+
+    // ---------- Counters ----------
+
+    private void updateSelectionCount() {
+        int sel = 0;
+        if (selectionProp != null && selectionProp.getValue() != null) {
+            sel = selectionProp.getValue().length;
+        } else if (idsProvider != null) {
+            sel = safeIds().length;
+        }
+        selectedCountLbl.setText("Selected: " + sel);
+    }
+
+    private void updateTotalsFromApi() {
+        if (api == null) return;
+        List<?> list = showFilteredTgl.isSelected()
+                ? api.filteredTasksProperty().getValue()
+                : api.tasksProperty().getValue();
+        int total = (list == null) ? 0 : list.size();
+        totalCountLbl.setText("Total: " + total);
+    }
+
+    private void enableActionButtons() {
+        boolean hasSel = false;
+        if (selectionProp != null && selectionProp.getValue() != null) {
+            hasSel = selectionProp.getValue().length > 0;
+        } else if (idsProvider != null) {
+            hasSel = safeIds().length > 0;
+        }
+        advanceBtn.setEnabled(hasSel);
+        markAsBtn.setEnabled(hasSel);
     }
 
     private int[] safeIds() {
         return (idsProvider != null) ? idsProvider.selectedIds() : new int[0];
     }
 
-    // ---------------------------------------------------------------------
-    // Styling helpers
-    // ---------------------------------------------------------------------
+    // ---------- Styling helpers ----------
 
     private static JPanel makeTransparent() {
         JPanel p = new JPanel();
@@ -527,7 +644,6 @@ public final class ToolBox extends RoundedPanel {
         b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
     }
 
-    /** Smaller inner padding + rounded border for compact small buttons. */
     private void styleSmallFilled(AbstractButton b, Color bg, Color fg) {
         b.setFocusPainted(false);
         b.setOpaque(true);
@@ -535,13 +651,12 @@ public final class ToolBox extends RoundedPanel {
         b.setForeground(fg);
         b.setFont(AppTheme.TB_LABEL_FONT_LG);
         b.setBorder(BorderFactory.createCompoundBorder(
-                new javax.swing.border.LineBorder(bg.darker(), 1, true), // rounded
-                BorderFactory.createEmptyBorder(4, 6, 4, 6)               // tighter padding
+                new javax.swing.border.LineBorder(bg.darker(), 1, true),
+                BorderFactory.createEmptyBorder(4, 6, 4, 6)
         ));
         b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
     }
 
-    /** Smaller inner padding + rounded border for hollow buttons / toggle. */
     private void styleSmallHollow(AbstractButton b,
                                   Color border, Color fg,
                                   Color selectedBg, Color selectedFg) {
@@ -550,8 +665,8 @@ public final class ToolBox extends RoundedPanel {
         b.setForeground(fg);
         b.setFont(AppTheme.TB_LABEL_FONT_LG);
         b.setBorder(BorderFactory.createCompoundBorder(
-                new javax.swing.border.LineBorder(border, 1, true),      // rounded
-                BorderFactory.createEmptyBorder(4, 6, 4, 6)               // tighter padding
+                new javax.swing.border.LineBorder(border, 1, true),
+                BorderFactory.createEmptyBorder(4, 6, 4, 6)
         ));
         b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         b.setBackground(new Color(0, 0, 0, 0));
@@ -565,7 +680,6 @@ public final class ToolBox extends RoundedPanel {
         }
     }
 
-    /** Ensures a non-null icon by returning a 1×1 transparent fallback. */
     private static Icon safeIcon(Icon icon) {
         if (icon != null) return icon;
         return new Icon() {
@@ -583,11 +697,9 @@ public final class ToolBox extends RoundedPanel {
         cb.setFont(AppTheme.TB_RADIO_FONT);
     }
 
-    // ---------------------------------------------------------------------
-    // Public API (for MVVM wiring)
-    // ---------------------------------------------------------------------
+    // ---------- Public API (for MVVM wiring) ----------
 
-    /** Updates the counters text (call from outside when selection/rows change). */
+    /** Updates counters text (you may call manually, but normally auto-bound). */
     public void updateCounters(int selected, int total) {
         selectedCountLbl.setText("Selected: " + Math.max(0, selected));
         totalCountLbl.setText("Total: " + Math.max(0, total));
@@ -610,107 +722,50 @@ public final class ToolBox extends RoundedPanel {
     public JLabel getTotalCountLabel() { return totalCountLbl; }
     public JButton getExportButton() { return exportBtn; }
 
+    // ---------- Helper contracts ----------
 
-    // ---------------------------------------------------------------------
-    // Backward-compatible wiring
-    // ---------------------------------------------------------------------
-
-// ---- Add these setters (optional wiring in small steps) ----
-    /** Backward-compatible hook for existing code that calls setApi(api). */
-    public void setApi(TasksViewAPI api) {
-        this.api = Objects.requireNonNull(api, "api");
-        // Minimal safe wiring that doesn't assume anything about selection/filter/export.
-        // Buttons that don't require extra providers are bound now; others remain as-is
-        // until you call the extra setters or wireTo(...).
-
-        // Clear previous listeners for these buttons only
-        for (var l : undoBtn.getActionListeners()) undoBtn.removeActionListener(l);
-        for (var l : redoBtn.getActionListeners()) redoBtn.removeActionListener(l);
-        for (var l : sortResetBtn.getActionListeners()) sortResetBtn.removeActionListener(l);
-        for (var l : filterResetBtn.getActionListeners()) filterResetBtn.removeActionListener(l);
-
-        // Bind core ops that don't need extra context
-        undoBtn.addActionListener(e -> this.api.undo());
-        redoBtn.addActionListener(e -> this.api.redo());
-
-        // Sort reset = clear strategy (safe, no mapper needed)
-        sortResetBtn.addActionListener(e -> {
-            sortCombo.setSelectedIndex(0);
-            this.api.setSortStrategy(null);
-        });
-
-        // Filter reset = clear filter (safe, no supplier needed)
-        filterResetBtn.addActionListener(e -> {
-            cbTodo.setSelected(false);
-            cbInProgress.setSelected(false);
-            cbCompleted.setSelected(false);
-            this.api.clearFilter();
-        });
-
-        // Note: advance/mark/sort-apply/filter-apply/export stay with their current listeners
-        // until you provide the missing context via the setters below or wireTo(...).
-    }
-
-    /** Provide selected IDs when you’re ready (e.g., from table). */
-    public void setIdsProvider(IdsProvider idsProvider) {
-        this.idsProvider = Objects.requireNonNull(idsProvider, "idsProvider");
-    }
-
-    /** Provide a mapper from combo value ("", "Title", "State", "ID") to SortStrategy. */
-    public void setSortMapper(Function<String, SortStrategy> sortMapper) {
-        this.sortMapper = Objects.requireNonNull(sortMapper, "sortMapper");
-        // Rebind sortApply to use mapper
-        for (var l : sortApplyBtn.getActionListeners()) sortApplyBtn.removeActionListener(l);
-        sortApplyBtn.addActionListener(e -> {
-            String key = (String) sortCombo.getSelectedItem();
-            this.api.setSortStrategy(this.sortMapper.apply(key == null ? "" : key));
-        });
-    }
-
-    /** Provide a supplier that builds the current combinator filter. */
-    public void setFilterSupplier(Supplier<ITaskFilter> filterSupplier) {
-        this.filterSupplier = Objects.requireNonNull(filterSupplier, "filterSupplier");
-        // Rebind filterApply to use supplier
-        for (var l : filterApplyBtn.getActionListeners()) filterApplyBtn.removeActionListener(l);
-        filterApplyBtn.addActionListener(e -> this.api.setFilter(this.filterSupplier.get()));
-    }
-
-    /** Provide an export handler that opens your dialog and calls the API. */
-    public void setExportHandler(ExportHandler exportHandler) {
-        this.exportHandler = Objects.requireNonNull(exportHandler, "exportHandler");
-        if (exportBtn != null) {
-            for (var l : exportBtn.getActionListeners()) exportBtn.removeActionListener(l);
-            exportBtn.addActionListener(e ->
-                    this.exportHandler.performExport(this.api, showFilteredTgl.isSelected(), safeIds()));
-        }
-    }
-
-    // ---------------------------------------------------------------------
-    // Small UI-side helper contracts
-    // ---------------------------------------------------------------------
-
-    /**
-     * Provides selected IDs and counters from the center content.
-     * Implement this at the UI layer (e.g., by delegating to your table component).
-     */
     @FunctionalInterface
     public interface IdsProvider {
         /** @return currently selected task IDs (empty if none). */
         int[] selectedIds();
-        // If you need more later, prefer adding separate setters on ToolBox (e.g., updateCounters).
     }
 
-    /**
-     * Handles the export interaction (dialog + API calls). Kept outside the ToolBox to avoid guessing dialog signatures.
-     */
     @FunctionalInterface
     public interface ExportHandler {
-        /**
-         * Performs the export using the given API.
-         * @param api UI API
-         * @param useFiltered whether the toggle "Show Filtered" is ON
-         * @param selectedIds currently selected IDs (may be empty)
-         */
         void performExport(TasksViewAPI api, boolean useFiltered, int[] selectedIds);
     }
+
+    /** Returns the current TaskState of the task with the given id by checking the preferred list
+     *  (filtered if toggle is on, otherwise full). Returns null if not found. */
+    private TaskState findCurrentState(int id) {
+        if (api == null) return null;
+        java.util.List<ITask> list = getPreferredList();
+        if (list != null) {
+            for (ITask t : list) if (t.getId() == id) return t.getState();
+        }
+        // Fallback – try the other list
+        list = showFilteredTgl.isSelected()
+                ? api.tasksProperty().getValue()
+                : api.filteredTasksProperty().getValue();
+        if (list != null) {
+            for (ITask t : list) if (t.getId() == id) return t.getState();
+        }
+        return null;
+    }
+
+    private java.util.List<ITask> getPreferredList() {
+        return showFilteredTgl.isSelected()
+                ? api.filteredTasksProperty().getValue()
+                : api.tasksProperty().getValue();
+    }
+
+    /** Defines the forward order ToDo (0) → InProgress (1) → Completed (2). */
+    private static int stateIndex(TaskState s) {
+        return switch (s) {
+            case ToDo -> 0;
+            case InProgress -> 1;
+            case Completed -> 2;
+        };
+    }
+
 }
