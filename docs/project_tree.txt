@@ -1,4 +1,4 @@
-Generated: 2025-09-06 18:05:57 (local)
+Generated: 2025-09-07 00:51:02 (local)
 
 Task_Management_Appliction/
 ├── .gitignore [OK]
@@ -428,8 +428,13 @@ Task_Management_Appliction/
         │       └── EmbeddedDerbyTasksDAO.java [OK]
         └── ui/
             ├── MainFrame.java [OK]
-            ├── TasksViewAPI.java [OK]
             ├── ViewModelException.java [OK]
+            ├── adapters/
+            │   ├── RowsPropertyAdapter.java [OK]
+            │   ├── TasksViewApiAdapter.java [OK]
+            │   └── UiTaskProxy.java [OK]
+            ├── api/
+            │   └── TasksViewAPI.java [OK]
             ├── chrome/
             │   └── WindowChrome.java [OK]
             ├── dialogs/

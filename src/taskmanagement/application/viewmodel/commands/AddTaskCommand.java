@@ -38,7 +38,7 @@ public final class AddTaskCommand implements Command {
         dao.addTask(taskToAdd);
         // DAO must reflect the effective id into taskToAdd.getId()
         createdId = taskToAdd.getId();
-        if (createdId == null || createdId <= 0) {
+        if (createdId == null || createdId < 0) {
             throw new TasksDAOException("DAO did not assign a valid id to the added task (got: " + createdId + ")");
         }
     }

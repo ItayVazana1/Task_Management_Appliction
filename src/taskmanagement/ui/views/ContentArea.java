@@ -7,6 +7,7 @@ import taskmanagement.ui.widgets.ToolBox;
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -75,25 +76,33 @@ public final class ContentArea extends JPanel {
     public void setApi(TasksViewAPI api) {
         this.api = Objects.requireNonNull(api, "api");
 
-        // Left rail may trigger VM operations and sometimes needs access to selection utilities.
+        // LEFT rail: may trigger VM operations and sometimes needs selection utilities.
         this.leftPanel.setApi(this.api, this.tasksPanel);
 
-        // Center binds to VM for row actions and list rendering.
+        // CENTER: binds to VM for row actions and list rendering.
         this.tasksPanel.setApi(this.api);
 
-        // --- Right rail: API + selected IDs provider ---
+        // RIGHT rail: API + selected IDs provider + counters + dialogs.
         this.rightPanel.setApi(this.api);
         this.rightPanel.setIdsProvider(tasksPanel::selectedIds);
 
-        // Bind selection & totals counters (auto-updating via Observer).
+        // Counters (auto-updating via Observer pattern).
         this.rightPanel.bindSelectionProperty(tasksPanel.selectedIdsProperty());
         this.rightPanel.bindTotalsFromApi();
 
         // Replace placeholders for Advance/Mark-as with real dialogs + VM calls.
         this.rightPanel.bindAdvanceAndMarkDialogs();
 
-        // (Optional) later: sort/filter/export binding can be added here via
-        // rightPanel.setSortMapper(...), rightPanel.setFilterSupplier(...), rightPanel.setExportHandler(...)
+        // ---- Sort wiring ----
+        // Stream strategies into the ToolBox (first = default "ID").
+        this.rightPanel.bindSortControls(List.of(
+                new taskmanagement.application.viewmodel.sort.SortById(),     // Default
+                new taskmanagement.application.viewmodel.sort.SortByTitle(),
+                new taskmanagement.application.viewmodel.sort.SortByState()
+        ));
+
+        // NOTE: If/when Filter and Export bindings are introduced in ToolBox,
+        // call their bind methods here similarly.
     }
 
     // ---------------------------------------------------------------------
@@ -146,5 +155,6 @@ public final class ContentArea extends JPanel {
         Dimension fixed = new Dimension(width, Math.max(10, pref.height));
         comp.setPreferredSize(fixed);
         comp.setMinimumSize(fixed);
+        comp.setMaximumSize(new Dimension(width, Integer.MAX_VALUE));
     }
 }

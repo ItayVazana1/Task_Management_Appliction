@@ -14,7 +14,9 @@ import taskmanagement.ui.api.TasksViewAPI;
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
@@ -37,7 +39,7 @@ import java.util.function.Supplier;
  *   <li>Use {@link #wireTo(TasksViewAPI, IdsProvider, Function, Supplier, ExportHandler, Property)}
  *   to fully bind actions + counters in one shot.</li>
  *   <li>Or use incremental setters: {@link #setApi(TasksViewAPI)}, {@link #setIdsProvider(IdsProvider)},
- *   {@link #setSortMapper(Function)}, {@link #setFilterSupplier(Supplier)},
+ *   {@link #setSortMapper(Function)}, {@link #bindSortControls(List)}, {@link #setFilterSupplier(Supplier)},
  *   {@link #setExportHandler(ExportHandler)}, {@link #bindSelectionProperty(Property)}.</li>
  * </ul>
  *
@@ -57,8 +59,7 @@ public final class ToolBox extends RoundedPanel {
     private final JButton markAsBtn  = new JButton("Mark as…");
 
     // === Section 3: Sort By + Apply/Reset ===
-    private final JComboBox<String> sortCombo =
-            new JComboBox<>(new String[] {"", "Title", "State", "ID"});
+    private final JComboBox<String> sortCombo = new JComboBox<>();
     private final JButton sortApplyBtn = new JButton("Apply");
     private final JButton sortResetBtn = new JButton("Reset");
 
@@ -90,6 +91,9 @@ public final class ToolBox extends RoundedPanel {
     private Property.Listener<List<ITask>> tasksListener;
     private Property.Listener<int[]>       selectionListener;
     private Property.Listener<List<ITask>> filteredListener;
+
+    // Internal name->strategy map for bindSortControls
+    private final Map<String, SortStrategy> sortMap = new LinkedHashMap<>();
 
     /** Constructs the toolbox panel with the 6-section layout. */
     public ToolBox() {
@@ -298,17 +302,18 @@ public final class ToolBox extends RoundedPanel {
     // ---------- Wiring ----------
 
     private void wirePlaceholders() {
+        // keep placeholders for Undo/Redo + Advance/Mark
         undoBtn.addActionListener(e -> JOptionPane.showMessageDialog(this,"Undo (placeholder)","Undo",JOptionPane.INFORMATION_MESSAGE));
         redoBtn.addActionListener(e -> JOptionPane.showMessageDialog(this,"Redo (placeholder)","Redo",JOptionPane.INFORMATION_MESSAGE));
         advanceBtn.addActionListener(e -> JOptionPane.showMessageDialog(this,"Advance (placeholder)","Advance",JOptionPane.INFORMATION_MESSAGE));
         markAsBtn.addActionListener(e -> JOptionPane.showMessageDialog(this,"Mark as… (placeholder)","Mark",JOptionPane.INFORMATION_MESSAGE));
 
-        sortApplyBtn.addActionListener(e -> JOptionPane.showMessageDialog(this,"Sort Apply (placeholder)","Sort",JOptionPane.INFORMATION_MESSAGE));
-        sortResetBtn.addActionListener(e -> JOptionPane.showMessageDialog(this,"Sort Reset (placeholder)","Sort",JOptionPane.INFORMATION_MESSAGE));
+        // IMPORTANT: no placeholder wiring for Sort Apply/Reset — real wiring happens in setSortMapper()
 
+        // Filter placeholders (real wiring provided via setFilterSupplier)
         filterApplyBtn.addActionListener(e -> JOptionPane.showMessageDialog(this,"Filter Apply (placeholder)","Filter",JOptionPane.INFORMATION_MESSAGE));
         filterResetBtn.addActionListener(e -> JOptionPane.showMessageDialog(this,"Filter Reset (placeholder)","Filter",JOptionPane.INFORMATION_MESSAGE));
-        showFilteredTgl.addActionListener(e -> updateTotalsFromApi()); // will only work once API is set
+        showFilteredTgl.addActionListener(e -> updateTotalsFromApi()); // safe: updates counter only
 
         if (exportBtn != null) {
             exportBtn.addActionListener(e ->
@@ -316,9 +321,7 @@ public final class ToolBox extends RoundedPanel {
         }
     }
 
-    /**
-     * Full binding (actions + counters) in one call.
-     */
+    /** Full binding (actions + counters) in one call. */
     public void wireTo(TasksViewAPI api,
                        IdsProvider idsProvider,
                        Function<String, SortStrategy> sortMapper,
@@ -338,7 +341,7 @@ public final class ToolBox extends RoundedPanel {
 
     /**
      * Minimal safe wiring for existing code that calls setApi(api) only.
-     * Binds Undo/Redo and Reset buttons; other actions remain placeholders until more setters are provided.
+     * Binds Undo/Redo; Sort Reset will be bound when sortMapper is provided.
      */
     public void setApi(TasksViewAPI api) {
         this.api = Objects.requireNonNull(api, "api");
@@ -346,17 +349,12 @@ public final class ToolBox extends RoundedPanel {
         // Clear & bind only safe ops
         for (var l : undoBtn.getActionListeners()) undoBtn.removeActionListener(l);
         for (var l : redoBtn.getActionListeners()) redoBtn.removeActionListener(l);
-        for (var l : sortResetBtn.getActionListeners()) sortResetBtn.removeActionListener(l);
         for (var l : filterResetBtn.getActionListeners()) filterResetBtn.removeActionListener(l);
 
         undoBtn.addActionListener(e -> this.api.undo());
         redoBtn.addActionListener(e -> this.api.redo());
 
-        sortResetBtn.addActionListener(e -> {
-            sortCombo.setSelectedIndex(0);
-            this.api.setSortStrategy(null);
-        });
-
+        // Filter reset stays here
         filterResetBtn.addActionListener(e -> {
             cbTodo.setSelected(false);
             cbInProgress.setSelected(false);
@@ -364,8 +362,6 @@ public final class ToolBox extends RoundedPanel {
             this.api.clearFilter();
             updateTotalsFromApi();
         });
-
-        // keep placeholders for the rest until fully wired
     }
 
     public void setIdsProvider(IdsProvider idsProvider) {
@@ -374,12 +370,42 @@ public final class ToolBox extends RoundedPanel {
         enableActionButtons();
     }
 
+    /** Convenience binder: populate combo from strategies and wire Apply/Reset to the VM API. */
+    public void bindSortControls(List<SortStrategy> strategies) {
+        Objects.requireNonNull(strategies, "strategies");
+        sortMap.clear();
+
+        DefaultComboBoxModel<String> model = new DefaultComboBoxModel<>();
+        for (SortStrategy s : strategies) {
+            if (s == null) continue;
+            String name = Optional.ofNullable(s.displayName()).orElse(s.getClass().getSimpleName());
+            sortMap.put(name, s);
+        }
+        for (String name : sortMap.keySet()) {
+            model.addElement(name);
+        }
+        sortCombo.setModel(model);
+        sortCombo.setSelectedIndex(0);
+
+        setSortMapper(key -> sortMap.get(key));
+    }
+
     public void setSortMapper(Function<String, SortStrategy> sortMapper) {
         this.sortMapper = Objects.requireNonNull(sortMapper, "sortMapper");
+
+        // Apply (real wiring)
         for (var l : sortApplyBtn.getActionListeners()) sortApplyBtn.removeActionListener(l);
         sortApplyBtn.addActionListener(e -> {
             String key = Optional.ofNullable((String) sortCombo.getSelectedItem()).orElse("");
             this.api.setSortStrategy(this.sortMapper.apply(key));
+        });
+
+        // Reset (returns to first strategy, e.g., "ID")
+        for (var l : sortResetBtn.getActionListeners()) sortResetBtn.removeActionListener(l);
+        sortResetBtn.addActionListener(e -> {
+            sortCombo.setSelectedIndex(0);
+            String firstKey = (String) sortCombo.getItemAt(0);
+            this.api.setSortStrategy(this.sortMapper.apply(firstKey));
         });
     }
 
@@ -401,9 +427,7 @@ public final class ToolBox extends RoundedPanel {
         }
     }
 
-    /**
-     * Binds the selection property for counters and button enablement.
-     */
+    /** Binds the selection property for counters and button enablement. */
     public void bindSelectionProperty(Property<int[]> selectionProperty) {
         this.selectionProp = Objects.requireNonNull(selectionProperty, "selectionProperty");
 
@@ -420,9 +444,7 @@ public final class ToolBox extends RoundedPanel {
         enableActionButtons();
     }
 
-    /**
-     * Subscribes to tasks/filtered properties to keep the Total counter fresh.
-     */
+    /** Subscribes to tasks/filtered properties to keep the Total counter fresh. */
     public void bindTotalsFromApi() {
         if (api == null) return;
 
@@ -439,12 +461,8 @@ public final class ToolBox extends RoundedPanel {
         updateTotalsFromApi();
     }
 
-
-    /**
-     * Replace placeholders for Advance/Mark with real actions + dialogs.
-     */
+    /** Replace placeholders for Advance/Mark with real actions + dialogs. */
     public void bindAdvanceAndMarkDialogs() {
-        // Clear current listeners
         for (var l : advanceBtn.getActionListeners()) advanceBtn.removeActionListener(l);
         for (var l : markAsBtn.getActionListeners()) markAsBtn.removeActionListener(l);
 
@@ -471,7 +489,6 @@ public final class ToolBox extends RoundedPanel {
         if (rc != JOptionPane.OK_OPTION) return;
 
         for (int id : ids) api.advanceState(id);
-        // VM should fire rows property; as a fallback you may call api.reload() if needed.
     }
 
     private void onMarkAsDialog() {
@@ -481,7 +498,6 @@ public final class ToolBox extends RoundedPanel {
             return;
         }
 
-        // Dialog UI
         final JDialog dlg = new JDialog(SwingUtilities.getWindowAncestor(this), "Mark as…", Dialog.ModalityType.APPLICATION_MODAL);
         dlg.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
         JPanel content = new JPanel(new GridBagLayout());
@@ -520,21 +536,18 @@ public final class ToolBox extends RoundedPanel {
 
             for (int id : ids) {
                 TaskState current = findCurrentState(id);
-                if (current == null) continue; // task not visible; skip safely
+                if (current == null) continue;
 
                 int curIdx = stateIndex(current);
                 int tgtIdx = stateIndex(target);
 
                 if (tgtIdx == curIdx) {
-                    // nothing to do
                     continue;
                 } else if (tgtIdx > curIdx) {
-                    // move forward step-by-step using advanceState to respect VM transition rules
                     for (int step = curIdx; step < tgtIdx; step++) {
                         try {
                             api.advanceState(id);
                         } catch (RuntimeException ex) {
-                            // If VM rejects for some reason, show once and break for this id
                             JOptionPane.showMessageDialog(this,
                                     "Failed to advance task #" + id + ": " + ex.getMessage(),
                                     "Mark as…", JOptionPane.ERROR_MESSAGE);
@@ -542,7 +555,6 @@ public final class ToolBox extends RoundedPanel {
                         }
                     }
                 } else {
-                    // backward not supported by VM — warn once
                     if (!warnedBackward) {
                         JOptionPane.showMessageDialog(this,
                                 "Backward transitions are not supported by the current workflow.\n" +
@@ -562,7 +574,6 @@ public final class ToolBox extends RoundedPanel {
         dlg.setLocationRelativeTo(this);
         dlg.setVisible(true);
     }
-
 
     // ---------- Counters ----------
 
@@ -735,15 +746,13 @@ public final class ToolBox extends RoundedPanel {
         void performExport(TasksViewAPI api, boolean useFiltered, int[] selectedIds);
     }
 
-    /** Returns the current TaskState of the task with the given id by checking the preferred list
-     *  (filtered if toggle is on, otherwise full). Returns null if not found. */
+    /** Returns the current TaskState of the task with the given id by checking the preferred list. */
     private TaskState findCurrentState(int id) {
         if (api == null) return null;
         java.util.List<ITask> list = getPreferredList();
         if (list != null) {
             for (ITask t : list) if (t.getId() == id) return t.getState();
         }
-        // Fallback – try the other list
         list = showFilteredTgl.isSelected()
                 ? api.tasksProperty().getValue()
                 : api.filteredTasksProperty().getValue();
@@ -767,5 +776,4 @@ public final class ToolBox extends RoundedPanel {
             case Completed -> 2;
         };
     }
-
 }

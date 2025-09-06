@@ -20,9 +20,9 @@ import java.util.Objects;
  * ----------
  * Sticky header + scrollable list of tasks bound to {@link TasksViewAPI}.
  *
- * Rows are built from either filtered or full list (auto-picked).
+ * <p>Rows are built from either filtered or full list (auto-picked).
  * We subscribe to BOTH properties to avoid missed updates when ViewModel
- * only notifies one side (filtered/all) or reuses list instances.
+ * only notifies one side (filtered/all) or reuses list instances.</p>
  *
  * <p>Selection:
  * Each row has a checkbox that toggles the task selection. The current
@@ -160,7 +160,23 @@ public final class TasksPanel extends JPanel {
      * @throws NullPointerException if api is null
      */
     public void setApi(TasksViewAPI api) {
-        this.api = Objects.requireNonNull(api, "api");
+        Objects.requireNonNull(api, "api");
+
+        // Unbind previous listeners if setApi is called more than once
+        if (this.api != null) {
+            try {
+                if (tasksListener != null) {
+                    this.api.tasksProperty().removeListener(tasksListener);
+                }
+                if (filteredListener != null) {
+                    this.api.filteredTasksProperty().removeListener(filteredListener);
+                }
+            } catch (Exception ignore) {
+                // Safe-guard: ignore if previous API was partially wired
+            }
+        }
+
+        this.api = api;
 
         // Paint immediately with current snapshot on EDT (preferring filtered if present)
         if (SwingUtilities.isEventDispatchThread()) {
@@ -174,14 +190,14 @@ public final class TasksPanel extends JPanel {
             if (SwingUtilities.isEventDispatchThread()) renderFromApi();
             else SwingUtilities.invokeLater(this::renderFromApi);
         };
-        api.tasksProperty().addListener(tasksListener);
+        this.api.tasksProperty().addListener(tasksListener);
 
         // Subscribe to FILTERED-TASKS (some VMs only notify this on edit)
         filteredListener = (oldList, newList) -> {
             if (SwingUtilities.isEventDispatchThread()) renderFromApi();
             else SwingUtilities.invokeLater(this::renderFromApi);
         };
-        api.filteredTasksProperty().addListener(filteredListener);
+        this.api.filteredTasksProperty().addListener(filteredListener);
     }
 
     /**
@@ -242,14 +258,18 @@ public final class TasksPanel extends JPanel {
     }
 
     private void renderTasks(List<ITask> tasks) {
-        // Keep old selection to restore if possible (by ID).
+        // Keep old selection to restore if possible (by ID)
         int[] oldSel = selectedIds();
 
         listPanel.removeAll();
         if (tasks != null) {
-            for (ITask t : tasks) {
+            int n = tasks.size();
+            for (int i = 0; i < n; i++) {
+                ITask t = tasks.get(i);
                 listPanel.add(buildRow(t));
-                listPanel.add(Box.createVerticalStrut(ROW_V_GAP));
+                if (i < n - 1) {
+                    listPanel.add(Box.createVerticalStrut(ROW_V_GAP));
+                }
             }
         }
         listPanel.revalidate();
@@ -546,10 +566,6 @@ public final class TasksPanel extends JPanel {
         sp.setPreferredSize(new Dimension(380, 140));
         ensureSafeFont(sp);
         content.add(sp, g);
-
-        g.gridx = 0; g.gridy++; g.fill = GridBagConstraints.NONE; g.weightx = 0;
-        content.add(dim("Status:"), g);
-        g.gridx = 1; content.add(pill(t.getState().name()), g);
 
         g.gridx = 0; g.gridy++; g.gridwidth = 2; g.anchor = GridBagConstraints.CENTER;
         g.insets = new Insets(16, 4, 4, 4);
