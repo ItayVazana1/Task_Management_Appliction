@@ -1,9 +1,9 @@
 package taskmanagement.ui.dialogs;
 
+import taskmanagement.domain.TaskState;
 import taskmanagement.ui.styles.AppTheme;
 import taskmanagement.ui.util.RoundedPanel;
 import taskmanagement.ui.util.UiUtils;
-import taskmanagement.domain.TaskState;
 
 import javax.swing.*;
 import java.awt.*;
@@ -22,17 +22,19 @@ public final class TaskEditorDialog extends JDialog {
     public enum Mode { ADD, EDIT }
 
     /** Initial values for edit mode. */
-    public static record Prefill(int id, String title, String description, TaskState state) {}
+    public static record Prefill(int id, String title, String description, TaskState state) { }
 
     /** Result of user confirmation. */
-    public static record EditorResult(Integer id, String title, String description, TaskState state) {}
+    public static record EditorResult(Integer id, String title, String description, TaskState state) { }
 
     private final Mode mode;
     private final Prefill prefill;
-    private final JTextField titleField;
-    private final JTextArea descriptionArea;
-    private final JComboBox<TaskState> stateCombo;
-    private boolean confirmed;
+
+    private final JTextField titleField = new JTextField(20);
+    private final JTextArea descriptionArea = new JTextArea(5, 20);
+    private final JComboBox<TaskState> stateCombo = new JComboBox<>(TaskState.values());
+
+    private boolean confirmed = false;
 
     /**
      * Constructs the task editor dialog.
@@ -45,45 +47,42 @@ public final class TaskEditorDialog extends JDialog {
         super(owner, mode == Mode.ADD ? "Add Task" : "Edit Task", ModalityType.APPLICATION_MODAL);
         this.mode = mode;
         this.prefill = prefill;
-        this.titleField = new JTextField(20);
-        this.descriptionArea = new JTextArea(5, 20);
-        this.stateCombo = new JComboBox<>(TaskState.values());
+
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+        setResizable(false);
+
         setContentPane(buildContent());
         pack();
-        setResizable(false);
         setLocationRelativeTo(owner);
-        getRootPane().setDefaultButton(okButton);
     }
 
-    private JButton okButton;
-
     /**
-     * Builds the UI content using project helpers.
+     * Builds the UI content (form + actions).
      */
     private JComponent buildContent() {
         RoundedPanel root = new RoundedPanel(AppTheme.PANEL_BG, AppTheme.WINDOW_CORNER_ARC);
         root.setLayout(new BorderLayout(0, 12));
         root.setBorder(BorderFactory.createEmptyBorder(16, 18, 16, 18));
 
-        // Title label
+        // Header
         JLabel header = new JLabel(mode == Mode.ADD ? "Add New Task" : "Edit Task");
         header.setFont(AppTheme.CTRL_BUTTON_FONT.deriveFont(Font.BOLD, 16f));
         header.setForeground(AppTheme.MAIN_TEXT);
 
+        // Form
         JPanel form = new JPanel();
         form.setLayout(new BoxLayout(form, BoxLayout.Y_AXIS));
         form.setOpaque(false);
 
         // Title field
-        UiUtils.styleTextFieldForDarkCentered(titleField);
         form.add(new JLabel("Title:"));
+        UiUtils.styleTextFieldForDarkCentered(titleField);
         form.add(titleField);
         form.add(Box.createVerticalStrut(8));
 
         // Description field
-        UiUtils.styleTextArea(descriptionArea);
         form.add(new JLabel("Description:"));
+        UiUtils.styleTextArea(descriptionArea);
         form.add(new JScrollPane(descriptionArea));
         form.add(Box.createVerticalStrut(8));
 
@@ -98,33 +97,18 @@ public final class TaskEditorDialog extends JDialog {
             stateCombo.setSelectedItem(prefill.state());
         }
 
+        // Actions
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         actions.setOpaque(false);
 
-        okButton = new JButton(mode == Mode.ADD ? "Add" : "Save");
+        final JButton okButton = new JButton(mode == Mode.ADD ? "Add" : "Save");
         UiUtils.styleStableHoverButton(okButton, AppTheme.TB_EXPORT_FG, AppTheme.MAIN_TEXT);
 
-        JButton cancelButton = new JButton("Cancel");
+        final JButton cancelButton = new JButton("Cancel");
         UiUtils.styleStableHoverButton(cancelButton, AppTheme.DARK_GREY, AppTheme.MAIN_TEXT);
 
-        okButton.addActionListener(e -> {
-            if (titleField.getText().trim().isEmpty()) {
-                JOptionPane.showMessageDialog(
-                        this,
-                        "Title cannot be empty",
-                        "Validation Error",
-                        JOptionPane.WARNING_MESSAGE
-                );
-                return;
-            }
-            confirmed = true;
-            dispose();
-        });
-
-        cancelButton.addActionListener(e -> {
-            confirmed = false;
-            dispose();
-        });
+        okButton.addActionListener(e -> onConfirm());
+        cancelButton.addActionListener(e -> onCancel());
 
         actions.add(cancelButton);
         actions.add(okButton);
@@ -132,7 +116,29 @@ public final class TaskEditorDialog extends JDialog {
         root.add(header, BorderLayout.NORTH);
         root.add(form, BorderLayout.CENTER);
         root.add(actions, BorderLayout.SOUTH);
+
+        getRootPane().setDefaultButton(okButton);
+
         return root;
+    }
+
+    private void onConfirm() {
+        if (titleField.getText().trim().isEmpty()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Title cannot be empty",
+                    "Validation Error",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+        confirmed = true;
+        dispose();
+    }
+
+    private void onCancel() {
+        confirmed = false;
+        dispose();
     }
 
     /**

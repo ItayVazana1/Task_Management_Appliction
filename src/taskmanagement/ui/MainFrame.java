@@ -1,6 +1,11 @@
 package taskmanagement.ui;
 
 import com.formdev.flatlaf.themes.FlatMacDarkLaf;
+import taskmanagement.application.viewmodel.TasksViewModel;
+import taskmanagement.persistence.DAOProvider;
+import taskmanagement.persistence.ITasksDAO;
+import taskmanagement.ui.api.TasksViewAPI;
+import taskmanagement.ui.adapters.TasksViewApiAdapter;
 import taskmanagement.ui.chrome.WindowChrome;
 import taskmanagement.ui.dialogs.AboutDialog;
 import taskmanagement.ui.dialogs.ConfirmExitDialog;
@@ -16,15 +21,38 @@ import java.awt.event.WindowEvent;
 
 /**
  * MainFrame
- * Borderless frame with HeaderBar (About/Close) and the main ContentArea.
+ * ---------
+ * Borderless main application window.
+ * Wires the MVVM stack (DAO → ViewModel → API) and injects
+ * the {@link TasksViewAPI} into the UI subtree.
+ *
+ * <p>This class contains no domain logic. It is responsible
+ * only for initialization and window-level concerns.</p>
  */
 public final class MainFrame extends JFrame {
 
+    /** Top header bar with app title and window controls. */
     private HeaderBar header;
 
+    /** UI-facing API, provided to ContentArea and its child panels. */
+    private final TasksViewAPI api;
+
+    /**
+     * Constructs the main frame, initializes L&F, wires DAO → ViewModel → API,
+     * and prepares the UI.
+     */
     public MainFrame() {
         super("Task Management App");
-        try { UIManager.setLookAndFeel(new FlatMacDarkLaf()); } catch (Throwable ignore) {}
+        try {
+            UIManager.setLookAndFeel(new FlatMacDarkLaf());
+        } catch (Throwable ignore) {
+            // Fallback to default L&F if FlatLaf is unavailable.
+        }
+
+        // ---- MVVM wiring (DAO -> ViewModel -> API) ----
+        ITasksDAO dao = DAOProvider.get();
+        TasksViewModel vm = new TasksViewModel(dao);
+        this.api = new TasksViewApiAdapter(vm);
 
         setContentPane(buildRoot());
         setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
@@ -37,12 +65,17 @@ public final class MainFrame extends JFrame {
         setLocationRelativeTo(null);
     }
 
+    /**
+     * Builds the root container: header (north) + body (center).
+     *
+     * @return root component
+     */
     private JComponent buildRoot() {
         JPanel root = new JPanel(new BorderLayout());
         root.setOpaque(true);
         root.setBackground(AppTheme.APP_BG);
 
-        // Header
+        // ---- Header ----
         header = new HeaderBar();
         header.setTitleText("Task Management App");
         header.onAbout(btn -> AboutDialog.showDialog(this));
@@ -53,12 +86,14 @@ public final class MainFrame extends JFrame {
             }
         });
 
-        // Drag by header (fallback)
+        // Enable drag by header (fallback if native not available)
         installDragOn(header);
         try {
             var m = WindowChrome.class.getDeclaredMethod("installDragHandler", JFrame.class, JComponent.class);
             m.invoke(null, this, header);
-        } catch (Throwable ignored) {}
+        } catch (Throwable ignored) {
+            // Safe to ignore: fallback drag already installed
+        }
 
         JPanel headerWrap = new JPanel(new BorderLayout());
         headerWrap.setOpaque(false);
@@ -67,7 +102,7 @@ public final class MainFrame extends JFrame {
         headerWrap.add(header, BorderLayout.CENTER);
         root.add(headerWrap, BorderLayout.NORTH);
 
-        // Body
+        // ---- Body ----
         JPanel bodyBackground = new JPanel(new BorderLayout());
         bodyBackground.setOpaque(true);
         bodyBackground.setBackground(AppTheme.BODY_BG);
@@ -75,14 +110,20 @@ public final class MainFrame extends JFrame {
                 AppTheme.PADDING, AppTheme.PADDING, AppTheme.PADDING, AppTheme.PADDING));
         root.add(bodyBackground, BorderLayout.CENTER);
 
+        // Pass API to ContentArea and children
         ContentArea content = new ContentArea();
+        content.setApi(api);  // ✅ Correct injection of API
+        api.reload();
         bodyBackground.add(content, BorderLayout.CENTER);
 
         installEscToClose();
         return root;
     }
 
-    /** ESC key closes the window (same as Close). */
+    /**
+     * Installs a global ESC shortcut to close the window
+     * (equivalent to clicking the close button).
+     */
     private void installEscToClose() {
         JRootPane root = getRootPane();
         InputMap im = root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
@@ -100,7 +141,11 @@ public final class MainFrame extends JFrame {
         });
     }
 
-    /** Fallback drag handler: drag the header to move the window. */
+    /**
+     * Fallback drag handler: allows moving the window by dragging the header.
+     *
+     * @param handle the header component
+     */
     private void installDragOn(JComponent handle) {
         final Point[] origin = new Point[1];
         MouseAdapter ma = new MouseAdapter() {
@@ -118,6 +163,11 @@ public final class MainFrame extends JFrame {
         handle.addMouseMotionListener(ma);
     }
 
+    /**
+     * Development-only launcher for this frame.
+     *
+     * @param args unused
+     */
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
             MainFrame f = new MainFrame();

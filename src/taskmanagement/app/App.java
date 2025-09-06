@@ -1,8 +1,5 @@
 package taskmanagement.app;
 
-import taskmanagement.application.viewmodel.TasksViewModel;
-import taskmanagement.persistence.DAOProvider;
-import taskmanagement.persistence.ITasksDAO;
 import taskmanagement.ui.MainFrame;
 import taskmanagement.ui.styles.AppTheme;
 
@@ -10,41 +7,43 @@ import javax.swing.SwingUtilities;
 
 /**
  * Application entry point (UI mode).
- * - Initializes DAO and ViewModel.
- * - Applies global UI defaults (accent, selection colors).
- * - Launches Swing UI (MainFrame) on the EDT.
- *
- * MVVM note: App wires dependencies (DAO -> ViewModel). MainFrame is pure View.
+ * <p>
+ * Responsibilities:
+ * <ul>
+ *   <li>Ensure Swing is launched on the EDT.</li>
+ *   <li>Apply global UI defaults (accent and selection colors).</li>
+ *   <li>Create and show the {@link MainFrame}.</li>
+ * </ul>
+ * </p>
+ * <p>
+ * MVVM note: The ViewModel/DAO wiring is intentionally deferred to the UI layer
+ * (see {@code MainFrame}) per the current connection approach for this chat.
+ * This class performs no model/persistence work and keeps startup minimal.
+ * </p>
  */
 public final class App {
 
-    private App() { /* utility class */ }
+    /** Utility class: no instances. */
+    private App() { }
 
+    /**
+     * Program entry point. Schedules UI initialization on the EDT,
+     * applies global theme defaults, sets a default uncaught exception handler,
+     * and shows the main application window.
+     *
+     * @param args command-line arguments (unused)
+     */
     public static void main(String[] args) {
-        try {
-            // Acquire DAO and construct the ViewModel (off-EDT is fine here)
-            final ITasksDAO dao = DAOProvider.get();
-            final TasksViewModel vm = new TasksViewModel(dao);
-            vm.reload(); // initial load from DB
+        SwingUtilities.invokeLater(() -> {
+            // Apply global Swing defaults (e.g., remove blue accent, dark selections).
+            AppTheme.applyAccentDefaults();
 
-            // Launch UI on the EDT
-            SwingUtilities.invokeLater(() -> {
-                // Apply global Swing defaults (remove blue accent, set dark selections, etc.)
-                AppTheme.applyAccentDefaults();
+            // Log unexpected exceptions instead of silent failures.
+            Thread.setDefaultUncaughtExceptionHandler((t, e) -> e.printStackTrace(System.err));
 
-                // Log unexpected exceptions instead of silent failures
-                Thread.setDefaultUncaughtExceptionHandler((t, e) -> e.printStackTrace(System.err));
-
-                // Create and show the main window
-                // Prefer constructor that accepts the ViewModel to keep MVVM wiring explicit:
-                // MainFrame frame = new MainFrame(vm);
-                MainFrame frame = new MainFrame(); // use this if your MainFrame has no-arg ctor
-                frame.setVisible(true);
-            });
-
-        } catch (Exception ex) {
-            ex.printStackTrace(System.err);
-            System.exit(1);
-        }
+            // Create and show the main window.
+            MainFrame frame = new MainFrame(); // preserve existing public API (no-arg constructor)
+            frame.setVisible(true);
+        });
     }
 }

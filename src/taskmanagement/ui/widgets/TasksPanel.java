@@ -1,5 +1,8 @@
 package taskmanagement.ui.widgets;
 
+import taskmanagement.application.viewmodel.events.Property; // strong-typed listener
+import taskmanagement.domain.ITask;
+import taskmanagement.ui.api.TasksViewAPI;
 import taskmanagement.ui.util.RoundedPanel;
 
 import javax.swing.*;
@@ -10,19 +13,16 @@ import java.awt.event.ComponentEvent;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * TasksPanel
- * ------------------------------
- * Sticky header + scrollable list. Each row is split into 3 mini-cards:
- *  [Left]   Checkbox
- *  [Middle] ID | Title | Status
- *  [Right]  Show more
+ * ----------
+ * Sticky header + scrollable list of tasks bound to {@link TasksViewAPI}.
  *
- * Header width now matches the viewport width (excludes vertical scrollbar)
- * by placing a right spacer whose width equals the scrollbar width.
- *
- * Comments in English only.
+ * Rows are built from either filtered or full list (auto-picked).
+ * We subscribe to BOTH properties to avoid missed updates when ViewModel
+ * only notifies one side (filtered/all) or reuses list instances.
  */
 public final class TasksPanel extends JPanel {
 
@@ -31,20 +31,20 @@ public final class TasksPanel extends JPanel {
 
     // ---------- typography ----------
     private static final float FONT_SIZE_BASE   = 11f;
-    private static final float HEADER_FONT_SIZE = 10f; // smaller header labels (bold)
+    private static final float HEADER_FONT_SIZE = 10f;
     private static final float FONT_SIZE_PILL   = 11f;
     private static final float FONT_SIZE_ID     = 11f;
 
     // ---------- visuals ----------
-    private static final Color CARD_BG        = new Color(58, 58, 58);   // outer row background
-    private static final Color MINI_BG        = new Color(66, 66, 66);   // mini-card background
+    private static final Color CARD_BG        = new Color(58, 58, 58);
+    private static final Color MINI_BG        = new Color(66, 66, 66);
     private static final int   OUTER_RADIUS   = 10;
     private static final int   MINI_RADIUS    = 8;
     private static final Insets OUTER_INSETS  = new Insets(6, 8, 6, 8);
     private static final int   ROW_V_GAP      = 8;
 
-    private static final Color HEADER_BG      = new Color(24, 24, 24);   // darker header
-    private static final Insets HEADER_INSETS = new Insets(6, 8, 6, 8);  // same inner padding as rows
+    private static final Color HEADER_BG      = new Color(24, 24, 24);
+    private static final Insets HEADER_INSETS = new Insets(6, 8, 6, 8);
 
     private static final Color TODO_BG   = new Color(0xE74C3C);
     private static final Color TODO_FG   = Color.WHITE;
@@ -55,10 +55,7 @@ public final class TasksPanel extends JPanel {
 
     private static final Color PIPE_FG   = new Color(140, 140, 140);
 
-    // ---------- columns (no Description) ----------
-    // Header 9 columns (with pipes):
-    // idx: 0   1    2   3     4    5      6    7     8
-    //     [CHK, |,  ID, |,  TITLE, |,   STATUS, |,  BTN]
+    // ---------- layout weights ----------
     private static final double W_CHECK = 0.30;
     private static final double W_ID    = 0.50;
     private static final double W_TITLE = 1.40;
@@ -73,21 +70,11 @@ public final class TasksPanel extends JPanel {
             W_BTN
     };
 
-    // Middle sub-grid weights (header cols 1..7)
     private static final double[] MID_WEIGHTS = new double[] {
-            0.0,     // pipe
-            W_ID,    // ID
-            0.0,     // pipe
-            W_TITLE, // Title
-            0.0,     // pipe
-            W_STAT,  // Status
-            0.0      // pipe
+            0.0, W_ID, 0.0, W_TITLE, 0.0, W_STAT, 0.0
     };
 
-    // Fixed pipe width
     private static final int PIPE_COL_W = 12;
-
-    // Minimum px per content col
     private static final int MIN_CHECK_W = 30;
     private static final int MIN_ID_W    = 36;
     private static final int MIN_TITLE_W = 90;
@@ -99,30 +86,33 @@ public final class TasksPanel extends JPanel {
     private final RoundedPanel headerPanel;
     private final JPanel listPanel;
     private final JScrollPane scrollPane;
-
-    /** Spacer on the right of the header to compensate for vertical scrollbar width. */
     private final JPanel headerRightSpacer;
 
     /** Last computed header 9-column widths. */
     private int[] headerColsPx = null;
+
+    private TasksViewAPI api;
+
+    /** Strong refs to listeners (avoid GC & missing updates). */
+    private Property.Listener<List<ITask>> tasksListener;
+    private Property.Listener<List<ITask>> filteredListener;
 
     public TasksPanel() {
         super(new BorderLayout());
         setOpaque(false);
         ensureSafeFont(this);
 
-        // Sticky header wrapper — add right spacer to match viewport width
+        // Sticky header
         headerPanel = buildHeader();
         headerWrapper = new JPanel(new BorderLayout());
         headerWrapper.setOpaque(false);
-        headerWrapper.setBorder(new EmptyBorder(0, 8, ROW_V_GAP, 8)); // left/right + bottom gap
+        headerWrapper.setBorder(new EmptyBorder(0, 8, ROW_V_GAP, 8));
         headerWrapper.add(headerPanel, BorderLayout.CENTER);
 
         headerRightSpacer = new JPanel();
         headerRightSpacer.setOpaque(false);
         headerRightSpacer.setPreferredSize(new Dimension(0, 1));
         headerWrapper.add(headerRightSpacer, BorderLayout.EAST);
-
         add(headerWrapper, BorderLayout.NORTH);
 
         // Rows container
@@ -132,7 +122,7 @@ public final class TasksPanel extends JPanel {
         listPanel.setBorder(new EmptyBorder(0, 8, 0, 8));
         ensureSafeFont(listPanel);
 
-        // Vertical-only scroll
+        // Scroll
         scrollPane = new JScrollPane(new ScrollableWidthPanel(listPanel),
                 ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
                 ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
@@ -140,21 +130,99 @@ public final class TasksPanel extends JPanel {
         scrollPane.getViewport().setOpaque(false);
         scrollPane.setOpaque(false);
         ensureSafeFont(scrollPane);
-
         add(scrollPane, BorderLayout.CENTER);
 
-        // Recompute widths on header wrapper resize
         headerWrapper.addComponentListener(new ComponentAdapter() {
             @Override public void componentResized(ComponentEvent e) {
                 SwingUtilities.invokeLater(TasksPanel.this::recomputeAndApplyFromHeader);
             }
         });
+    }
 
-        addDemoTasks();
+    // ---------------------------------------------------------------------
+    // API wiring
+    // ---------------------------------------------------------------------
+
+    /**
+     * Inject API, paint snapshot on EDT, and subscribe to BOTH properties.
+     */
+    public void setApi(TasksViewAPI api) {
+        this.api = Objects.requireNonNull(api, "api");
+
+        // Paint immediately with current snapshot on EDT (preferring filtered if present)
+        if (SwingUtilities.isEventDispatchThread()) {
+            renderFromApi();
+        } else {
+            SwingUtilities.invokeLater(this::renderFromApi);
+        }
+
+        // Subscribe to ALL-TASKS
+        tasksListener = (oldList, newList) -> {
+            if (SwingUtilities.isEventDispatchThread()) renderFromApi();
+            else SwingUtilities.invokeLater(this::renderFromApi);
+        };
+        api.tasksProperty().addListener(tasksListener);
+
+        // Subscribe to FILTERED-TASKS (some VMs only notify this on edit)
+        filteredListener = (oldList, newList) -> {
+            if (SwingUtilities.isEventDispatchThread()) renderFromApi();
+            else SwingUtilities.invokeLater(this::renderFromApi);
+        };
+        api.filteredTasksProperty().addListener(filteredListener);
+    }
+
+    /**
+     * Forces a repaint from the latest API snapshot (useful after explicit reload()).
+     */
+    public void refreshNow() {
+        if (SwingUtilities.isEventDispatchThread()) {
+            renderFromApi();
+        } else {
+            SwingUtilities.invokeLater(this::renderFromApi);
+        }
+    }
+
+    /** Prefer filtered list when non-null, otherwise full list. */
+    private void renderFromApi() {
+        if (api == null) return;
+        List<ITask> filtered = api.filteredTasksProperty().getValue();
+        List<ITask> all      = api.tasksProperty().getValue();
+        List<ITask> toShow   = (filtered != null) ? filtered : all;
+        renderTasks(toShow);
+    }
+
+    /** @return IDs of all currently selected tasks. */
+    public List<Integer> getSelectedIds() {
+        List<Integer> ids = new ArrayList<>();
+        for (Component c : listPanel.getComponents()) {
+            if (c instanceof RoundedPanel row) {
+                JCheckBox chk = (JCheckBox) findByName(row, "row-check");
+                if (chk != null && chk.isSelected()) {
+                    Integer id = (Integer) chk.getClientProperty("taskId");
+                    if (id != null) ids.add(id);
+                }
+            }
+        }
+        return ids;
+    }
+
+    // ---------------------------------------------------------------------
+    // Rendering
+    // ---------------------------------------------------------------------
+
+    private void renderTasks(List<ITask> tasks) {
+        listPanel.removeAll();
+        if (tasks != null) {
+            for (ITask t : tasks) {
+                listPanel.add(buildRow(t));
+                listPanel.add(Box.createVerticalStrut(ROW_V_GAP));
+            }
+        }
+        listPanel.revalidate();
+        listPanel.repaint();
         SwingUtilities.invokeLater(this::recomputeAndApplyFromHeader);
     }
 
-    // ---------- header ----------
     private RoundedPanel buildHeader() {
         RoundedPanel header = new RoundedPanel(HEADER_BG, 10);
         header.setOpaque(false);
@@ -173,14 +241,14 @@ public final class TasksPanel extends JPanel {
 
         int x = 0;
         headerAdd(header, gc, x++, headerLabel("✅"),      W_CHECK);
-        headerAdd(header, gc, x++, pipeLabel(),          0);
-        headerAdd(header, gc, x++, headerLabel("ID"),    W_ID);
-        headerAdd(header, gc, x++, pipeLabel(),          0);
-        headerAdd(header, gc, x++, headerLabel("Title"), W_TITLE);
-        headerAdd(header, gc, x++, pipeLabel(),          0);
-        headerAdd(header, gc, x++, headerLabel("Status"),W_STAT);
-        headerAdd(header, gc, x++, pipeLabel(),          0);
-        headerAdd(header, gc, x++, headerLabel("[...]"),      W_BTN);
+        headerAdd(header, gc, x++, pipeLabel(),           0);
+        headerAdd(header, gc, x++, headerLabel("ID"),     W_ID);
+        headerAdd(header, gc, x++, pipeLabel(),           0);
+        headerAdd(header, gc, x++, headerLabel("Title"),  W_TITLE);
+        headerAdd(header, gc, x++, pipeLabel(),           0);
+        headerAdd(header, gc, x++, headerLabel("Status"), W_STAT);
+        headerAdd(header, gc, x++, pipeLabel(),           0);
+        headerAdd(header, gc, x++, headerLabel("[...]"),  W_BTN);
 
         header.setAlignmentX(LEFT_ALIGNMENT);
         header.setMaximumSize(new Dimension(Integer.MAX_VALUE, header.getPreferredSize().height));
@@ -209,121 +277,11 @@ public final class TasksPanel extends JPanel {
         return p;
     }
 
-    // ---------- compute & apply widths ----------
-    private void recomputeAndApplyFromHeader() {
-        // 1) Adjust right spacer to the visible vertical scrollbar width (if any)
-        JScrollBar vsb = scrollPane.getVerticalScrollBar();
-        int sbw = (vsb != null && vsb.isShowing()) ? Math.max(0, vsb.getWidth()) : 0;
-        headerRightSpacer.setPreferredSize(new Dimension(sbw, 1));
-        headerRightSpacer.setMinimumSize(new Dimension(sbw, 1));
-        headerRightSpacer.setMaximumSize(new Dimension(sbw, Integer.MAX_VALUE));
-        headerWrapper.revalidate();
+    // ---------------------------------------------------------------------
+    // Row construction
+    // ---------------------------------------------------------------------
 
-        // 2) Now the headerPanel.getWidth() equals the viewport width (+ header inset)
-        int available = headerPanel.getWidth();
-        if (available <= 0) { SwingUtilities.invokeLater(this::recomputeAndApplyFromHeader); return; }
-
-        int inner = available - (HEADER_INSETS.left + HEADER_INSETS.right);
-        if (inner <= 0) return;
-
-        // 4 pipes total
-        final int PIPE_COUNT = 4;
-        int pipesWidth = PIPE_COUNT * PIPE_COL_W;
-
-        int[] mins = { MIN_CHECK_W, MIN_ID_W, MIN_TITLE_W, MIN_STAT_W, MIN_BTN_W };
-        double[] ws = { W_CHECK, W_ID, W_TITLE, W_STAT, W_BTN };
-
-        int contentWidth = inner - pipesWidth;
-        int minSum = 0; for (int m : mins) minSum += m;
-
-        int[] cols = mins.clone();
-        int extra = Math.max(0, contentWidth - minSum);
-        double wSum = 0; for (double w : ws) wSum += w;
-        for (int i = 0; i < cols.length; i++) {
-            cols[i] += (int) Math.floor(extra * (ws[i] / wSum));
-        }
-        // rounding fix
-        int used = 0; for (int c : cols) used += c;
-        int delta = contentWidth - used;
-        if (delta != 0) cols[2] += delta; // adjust Title
-
-        // 9-length widths (with pipes)
-        headerColsPx = new int[] {
-                cols[0], PIPE_COL_W,
-                cols[1], PIPE_COL_W,
-                cols[2], PIPE_COL_W,
-                cols[3], PIPE_COL_W,
-                cols[4]
-        };
-
-        // Apply to header
-        GridBagLayout h = (GridBagLayout) headerPanel.getLayout();
-        h.columnWeights = COL_WEIGHTS.clone();
-        h.columnWidths  = headerColsPx.clone();
-        headerPanel.revalidate();
-
-        // Apply to each row
-        for (Component c : listPanel.getComponents()) {
-            if (c instanceof RoundedPanel row) syncRowLayouts(row);
-        }
-        listPanel.revalidate();
-        listPanel.repaint();
-    }
-
-    /** Apply widths to the row: outer 3 mini-cards and inner middle sub-grid. */
-    private void syncRowLayouts(RoundedPanel row) {
-        int leftW  = headerColsPx[0];
-        int midW   = 0; for (int i = 1; i <= 7; i++) midW += headerColsPx[i];
-        int rightW = headerColsPx[8];
-
-        GridBagLayout outer = (GridBagLayout) row.getLayout();
-        outer.columnWeights = new double[] { 0, 1, 0 };
-        outer.columnWidths  = new int[] { leftW, midW, rightW };
-
-        for (Component cc : row.getComponents()) {
-            if (cc instanceof RoundedPanel p && "mid-panel".equals(p.getClientProperty("role"))) {
-                if (p.getLayout() instanceof GridBagLayout mid) {
-                    int[] midCols = Arrays.copyOfRange(headerColsPx, 1, 8);
-                    mid.columnWeights = MID_WEIGHTS.clone();
-                    mid.columnWidths  = midCols;
-                    p.revalidate();
-                }
-            }
-        }
-        row.revalidate();
-    }
-
-    // ---------- demo data ----------
-    private void addDemoTasks() {
-        listPanel.removeAll();
-
-        List<Task> items = new ArrayList<>(25);
-        for (int i = 1; i <= 25; i++) {
-            String title  = "Demo Task " + i;
-            String desc   = "This is a description for demo task " + i + " with some sample text.";
-            String status = switch (i % 3) { case 1 -> "To-Do"; case 2 -> "In-Progress"; default -> "Completed"; };
-            items.add(new Task(i, title, desc, status));
-        }
-
-        for (Task t : items) {
-            listPanel.add(buildRow(t));
-            listPanel.add(Box.createVerticalStrut(ROW_V_GAP));
-        }
-        listPanel.revalidate();
-        listPanel.repaint();
-    }
-
-    // ---------- public API ----------
-    public void addTaskCard(int id, String title, String description, String status) {
-        listPanel.add(buildRow(new Task(id, title, description, status)));
-        listPanel.add(Box.createVerticalStrut(ROW_V_GAP));
-        listPanel.revalidate();
-        listPanel.repaint();
-        SwingUtilities.invokeLater(this::recomputeAndApplyFromHeader);
-    }
-
-    // ---------- row construction (3 mini-cards) ----------
-    private RoundedPanel buildRow(Task task) {
+    private RoundedPanel buildRow(ITask task) {
         RoundedPanel row = new RoundedPanel(CARD_BG, OUTER_RADIUS);
         row.setOpaque(false);
         row.setBorder(new EmptyBorder(OUTER_INSETS));
@@ -332,10 +290,9 @@ public final class TasksPanel extends JPanel {
 
         GridBagConstraints gc = new GridBagConstraints();
         gc.gridy = 0;
-        gc.insets = new Insets(0, 0, 0, 6); // gap between mini-cards
+        gc.insets = new Insets(0, 0, 0, 6);
         gc.anchor = GridBagConstraints.CENTER;
         gc.fill   = GridBagConstraints.BOTH;
-        gc.weighty = 0;
 
         // Left mini-card: checkbox
         RoundedPanel left = new RoundedPanel(MINI_BG, MINI_RADIUS);
@@ -343,6 +300,8 @@ public final class TasksPanel extends JPanel {
         left.setLayout(new GridBagLayout());
         left.setBorder(new EmptyBorder(4, 6, 4, 6));
         JCheckBox chk = new JCheckBox();
+        chk.setName("row-check");
+        chk.putClientProperty("taskId", task.getId());
         chk.setOpaque(false);
         chk.setFocusable(false);
         Dimension cbSize = new Dimension(18, 18);
@@ -364,24 +323,23 @@ public final class TasksPanel extends JPanel {
         g.insets = new Insets(0, 0, 0, 6);
         g.anchor = GridBagConstraints.CENTER;
         g.fill   = GridBagConstraints.HORIZONTAL;
-        g.weighty = 0;
 
         int xx = 0;
         addMid(mid, g, xx++, pipeLabel(), 0);
 
-        JLabel id = centeredLabel(String.valueOf(task.id()));
+        JLabel id = centeredLabel(String.valueOf(task.getId()));
         id.setFont(safeDerive(id.getFont(), Font.BOLD).deriveFont(FONT_SIZE_ID));
         addMid(mid, g, xx++, id, W_ID);
 
         addMid(mid, g, xx++, pipeLabel(), 0);
 
-        JLabel title = centeredLabel(clipForPreview(task.title(), TITLE_PREVIEW_MAX));
+        JLabel title = centeredLabel(clipForPreview(task.getTitle(), TITLE_PREVIEW_MAX));
         title.setFont(title.getFont().deriveFont(FONT_SIZE_BASE));
         addMid(mid, g, xx++, title, W_TITLE);
 
         addMid(mid, g, xx++, pipeLabel(), 0);
 
-        JLabel status = pill(task.status());
+        JLabel status = pill(task.getState().name());
         status.setFont(safeDerive(status.getFont(), Font.BOLD).deriveFont(FONT_SIZE_PILL));
         addMid(mid, g, xx++, centerWrap(status), W_STAT);
 
@@ -404,12 +362,10 @@ public final class TasksPanel extends JPanel {
         gc.gridx = 2; gc.weightx = 0; gc.insets = new Insets(0, 0, 0, 0);
         row.add(right, gc);
 
-        // Stretch to full width
         row.setAlignmentX(LEFT_ALIGNMENT);
         Dimension pref = row.getPreferredSize();
         row.setMaximumSize(new Dimension(Integer.MAX_VALUE, pref.height));
 
-        // Sync if header widths are ready
         if (headerColsPx != null) syncRowLayouts(row);
         return row;
     }
@@ -420,8 +376,90 @@ public final class TasksPanel extends JPanel {
         panel.add(comp, c);
     }
 
-    // ---------- dialog ----------
-    private void showTaskDialog(Component parent, Task t) {
+    // ---------------------------------------------------------------------
+    // Header sync
+    // ---------------------------------------------------------------------
+
+    private void recomputeAndApplyFromHeader() {
+        JScrollBar vsb = scrollPane.getVerticalScrollBar();
+        int sbw = (vsb != null && vsb.isShowing()) ? Math.max(0, vsb.getWidth()) : 0;
+        headerRightSpacer.setPreferredSize(new Dimension(sbw, 1));
+        headerRightSpacer.setMinimumSize(new Dimension(sbw, 1));
+        headerRightSpacer.setMaximumSize(new Dimension(sbw, Integer.MAX_VALUE));
+        headerWrapper.revalidate();
+
+        int available = headerPanel.getWidth();
+        if (available <= 0) { SwingUtilities.invokeLater(this::recomputeAndApplyFromHeader); return; }
+
+        int inner = available - (HEADER_INSETS.left + HEADER_INSETS.right);
+        if (inner <= 0) return;
+
+        final int PIPE_COUNT = 4;
+        int pipesWidth = PIPE_COUNT * PIPE_COL_W;
+
+        int[] mins = { MIN_CHECK_W, MIN_ID_W, MIN_TITLE_W, MIN_STAT_W, MIN_BTN_W };
+        double[] ws = { W_CHECK, W_ID, W_TITLE, W_STAT, W_BTN };
+
+        int contentWidth = inner - pipesWidth;
+        int minSum = Arrays.stream(mins).sum();
+
+        int[] cols = mins.clone();
+        int extra = Math.max(0, contentWidth - minSum);
+        double wSum = Arrays.stream(ws).sum();
+        for (int i = 0; i < cols.length; i++) {
+            cols[i] += (int) Math.floor(extra * (ws[i] / wSum));
+        }
+        int used = Arrays.stream(cols).sum();
+        int delta = contentWidth - used;
+        if (delta != 0) cols[2] += delta;
+
+        headerColsPx = new int[] {
+                cols[0], PIPE_COL_W,
+                cols[1], PIPE_COL_W,
+                cols[2], PIPE_COL_W,
+                cols[3], PIPE_COL_W,
+                cols[4]
+        };
+
+        GridBagLayout h = (GridBagLayout) headerPanel.getLayout();
+        h.columnWeights = COL_WEIGHTS.clone();
+        h.columnWidths  = headerColsPx.clone();
+        headerPanel.revalidate();
+
+        for (Component c : listPanel.getComponents()) {
+            if (c instanceof RoundedPanel row) syncRowLayouts(row);
+        }
+        listPanel.revalidate();
+        listPanel.repaint();
+    }
+
+    private void syncRowLayouts(RoundedPanel row) {
+        int leftW  = headerColsPx[0];
+        int midW   = 0; for (int i = 1; i <= 7; i++) midW += headerColsPx[i];
+        int rightW = headerColsPx[8];
+
+        GridBagLayout outer = (GridBagLayout) row.getLayout();
+        outer.columnWeights = new double[] { 0, 1, 0 };
+        outer.columnWidths  = new int[] { leftW, midW, rightW };
+
+        for (Component cc : row.getComponents()) {
+            if (cc instanceof RoundedPanel p && "mid-panel".equals(p.getClientProperty("role"))) {
+                if (p.getLayout() instanceof GridBagLayout mid) {
+                    int[] midCols = Arrays.copyOfRange(headerColsPx, 1, 8);
+                    mid.columnWeights = MID_WEIGHTS.clone();
+                    mid.columnWidths  = midCols;
+                    p.revalidate();
+                }
+            }
+        }
+        row.revalidate();
+    }
+
+    // ---------------------------------------------------------------------
+    // Dialog
+    // ---------------------------------------------------------------------
+
+    private void showTaskDialog(Component parent, ITask t) {
         JDialog dlg = new JDialog(SwingUtilities.getWindowAncestor(parent),
                 "Task Details", Dialog.ModalityType.APPLICATION_MODAL);
 
@@ -435,14 +473,14 @@ public final class TasksPanel extends JPanel {
         g.anchor = GridBagConstraints.WEST;
 
         content.add(dim("Task ID:"), g);
-        g.gridx = 1; content.add(val(String.valueOf(t.id())), g);
+        g.gridx = 1; content.add(val(String.valueOf(t.getId())), g);
 
         g.gridx = 0; g.gridy++; content.add(dim("Title:"), g);
-        g.gridx = 1; content.add(val(t.title()), g);
+        g.gridx = 1; content.add(val(t.getTitle()), g);
 
         g.gridx = 0; g.gridy++; content.add(dim("Description:"), g);
         g.gridx = 1; g.fill = GridBagConstraints.HORIZONTAL; g.weightx = 1.0;
-        JTextArea ta = new JTextArea(t.description());
+        JTextArea ta = new JTextArea(t.getDescription());
         ensureSafeFont(ta);
         ta.setEditable(false);
         ta.setLineWrap(true);
@@ -459,7 +497,7 @@ public final class TasksPanel extends JPanel {
 
         g.gridx = 0; g.gridy++; g.fill = GridBagConstraints.NONE; g.weightx = 0;
         content.add(dim("Status:"), g);
-        g.gridx = 1; content.add(pill(t.status()), g);
+        g.gridx = 1; content.add(pill(t.getState().name()), g);
 
         g.gridx = 0; g.gridy++; g.gridwidth = 2; g.anchor = GridBagConstraints.CENTER;
         g.insets = new Insets(16, 4, 4, 4);
@@ -474,7 +512,10 @@ public final class TasksPanel extends JPanel {
         dlg.setVisible(true);
     }
 
-    // ---------- helpers ----------
+    // ---------------------------------------------------------------------
+    // Helpers
+    // ---------------------------------------------------------------------
+
     private static String clipForPreview(String s, int n) {
         if (s == null) return "";
         if (n <= 3)    return (s.length() <= 3) ? s : "...";
@@ -533,9 +574,17 @@ public final class TasksPanel extends JPanel {
         return l;
     }
 
-    private record Task(int id, String title, String description, String status) { }
+    private static JComponent findByName(Container parent, String name) {
+        for (Component c : parent.getComponents()) {
+            if (name.equals(c.getName())) return (JComponent) c;
+            if (c instanceof Container nested) {
+                JComponent f = findByName(nested, name);
+                if (f != null) return f;
+            }
+        }
+        return null;
+    }
 
-    // ---------- scrollable container ----------
     private static final class ScrollableWidthPanel extends JPanel implements Scrollable {
         private final JComponent inner;
         ScrollableWidthPanel(JComponent inner) {
@@ -553,7 +602,6 @@ public final class TasksPanel extends JPanel {
         @Override public boolean getScrollableTracksViewportHeight() { return false; }
     }
 
-    // ---------- font safety ----------
     private static void ensureSafeFont(JComponent c) {
         if (c.getFont() == null) {
             Font f = UIManager.getFont("Label.font");
@@ -561,6 +609,7 @@ public final class TasksPanel extends JPanel {
             c.setFont(f);
         }
     }
+
     private static Font safeDerive(Font base, int style) {
         if (base == null) {
             Font f = UIManager.getFont("Label.font");

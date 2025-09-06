@@ -1,5 +1,6 @@
 package taskmanagement.ui.views;
 
+import taskmanagement.ui.api.TasksViewAPI;
 import taskmanagement.ui.widgets.ControlPanel;
 import taskmanagement.ui.widgets.TasksPanel;
 import taskmanagement.ui.widgets.ToolBox;
@@ -12,31 +13,25 @@ import java.awt.*;
  * -----------
  * Three-column container: LEFT | CENTER | RIGHT.
  * LEFT and RIGHT have fixed widths; CENTER flexes to occupy remaining space.
- * The panel itself does not depend on any theme classes (pure Swing).
  *
- * Layout rules:
- * - LEFT, RIGHT: weightx=0 (fixed width via preferred/minimum size).
- * - CENTER:      weightx=1 (flex).
- * - All columns: weighty=1 and fill=BOTH to share vertical growth.
+ * <p>This class wires the UI subtree to a {@link TasksViewAPI}
+ * provided from {@link taskmanagement.ui.MainFrame}.</p>
  */
 public final class ContentArea extends JPanel {
 
-    /** Fixed width (px) for the left column container. */
     public static final int LEFT_PANEL_WIDTH  = 150;
-    /** Fixed width (px) for the right column container. */
     public static final int RIGHT_PANEL_WIDTH = 260;
-    /** Horizontal gutter (px) to the right of LEFT and CENTER columns. */
     public static final int H_GUTTER          = 12;
-    /** Optional minimum width (px) for the center column to avoid collapse. */
     public static final int CENTER_MIN_WIDTH  = 650;
 
-    private final JComponent leftPanel;
+    private final ControlPanel leftPanel;
     private final TasksPanel tasksPanel;
-    private final JComponent rightPanel;
+    private final ToolBox rightPanel;
+
+    private TasksViewAPI api;
 
     /**
-     * Creates a ContentArea with default column components:
-     * left = {@link ControlPanel}, center = {@link TasksPanel}, right = {@link ToolBox}.
+     * Creates a ContentArea with default column components.
      */
     public ContentArea() {
         this(new ControlPanel(), new TasksPanel(), new ToolBox());
@@ -44,17 +39,30 @@ public final class ContentArea extends JPanel {
 
     /**
      * Creates a ContentArea with custom column components.
-     *
-     * @param leftPanel  component for the left column (fallback: ControlPanel)
-     * @param tasksPanel tasks list panel for the center column (fallback: new TasksPanel)
-     * @param rightPanel component for the right column (fallback: ToolBox)
      */
-    public ContentArea(JComponent leftPanel, TasksPanel tasksPanel, JComponent rightPanel) {
+    public ContentArea(ControlPanel leftPanel, TasksPanel tasksPanel, ToolBox rightPanel) {
         super(new GridBagLayout());
         this.leftPanel  = (leftPanel  != null) ? leftPanel  : new ControlPanel();
         this.tasksPanel = (tasksPanel != null) ? tasksPanel : new TasksPanel();
         this.rightPanel = (rightPanel != null) ? rightPanel : new ToolBox();
         initLayout();
+    }
+
+    /**
+     * Injects the {@link TasksViewAPI} into this ContentArea and its child panels.
+     *
+     * @param api the API to use (must not be null)
+     */
+    public void setApi(TasksViewAPI api) {
+        this.api = api;
+
+        // ControlPanel needs both the API and the TasksPanel (for selection).
+        this.leftPanel.setApi(api, this.tasksPanel);
+
+        // TasksPanel/ToolBox receive the API as usual.
+        // (נדרש ש־TasksPanel ו־ToolBox יחשפו setApi(TasksViewAPI))
+        this.tasksPanel.setApi(api);
+        this.rightPanel.setApi(api);
     }
 
     // ---------------------------------------------------------------------
@@ -67,7 +75,6 @@ public final class ContentArea extends JPanel {
         lockWidth(leftPanel, LEFT_PANEL_WIDTH);
         lockWidth(rightPanel, RIGHT_PANEL_WIDTH);
 
-        // Equal gutters to the right of LEFT and CENTER columns
         leftPanel.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, H_GUTTER));
         tasksPanel.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, H_GUTTER));
         rightPanel.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));

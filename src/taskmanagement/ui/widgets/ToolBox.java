@@ -3,14 +3,31 @@ package taskmanagement.ui.widgets;
 import taskmanagement.ui.styles.AppTheme;
 import taskmanagement.ui.util.UiUtils;
 import taskmanagement.ui.util.RoundedPanel;
-import taskmanagement.ui.dialogs.ExportDialog;
+
+import taskmanagement.ui.dialogs.ExportDialog; // kept for backwards compat if you already import it
+
+import taskmanagement.ui.widgets.ToolBox.ExportHandler;
+import taskmanagement.ui.widgets.ToolBox.IdsProvider;
+
+import taskmanagement.application.viewmodel.TasksViewModel;
+import taskmanagement.application.viewmodel.ExportFormat;
+import taskmanagement.application.viewmodel.sort.SortStrategy;
+
+import taskmanagement.domain.TaskState;
+import taskmanagement.domain.filter.ITaskFilter;
+import taskmanagement.ui.api.TasksViewAPI;
 
 import javax.swing.*;
 import java.awt.*;
+import java.nio.file.Path;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * ToolBox
- * <p>Right-side vertical toolbox split into six sections (height ratios sum to 100%):</p>
+ * <p>Right-side vertical toolbox split into six sections (height ratios sum to 100%).</p>
  * <ol>
  *   <li>20% — Undo / Redo (two round mini buttons, centered per half).</li>
  *   <li>20% — Advance / Mark as… (two icon+text buttons, centered per half).</li>
@@ -19,8 +36,10 @@ import java.awt.*;
  *   <li>5%  — Counters: Selected / Total (two equal halves).</li>
  *   <li>15% — Export (primary button centered).</li>
  * </ol>
- * <p>No ViewModel wiring is included here; actions show placeholders.
- * All controls are exposed via getters for MVVM binding.</p>
+ * <p>
+ * Default behavior wires placeholders. Call {@link #wireTo(TasksViewAPI, IdsProvider, Function, Supplier, ExportHandler)}
+ * to bind actual VM operations without leaking model/DAO into the UI.
+ * </p>
  */
 public final class ToolBox extends RoundedPanel {
 
@@ -58,6 +77,13 @@ public final class ToolBox extends RoundedPanel {
 
     // === Section 6: Export ===
     private JButton exportBtn; // created in buildSection6()
+
+    // ---- Binding state (optional) ----
+    private TasksViewAPI api; // set by wireTo(...)
+    private IdsProvider idsProvider; // set by wireTo(...)
+    private Function<String, SortStrategy> sortMapper; // set by wireTo(...)
+    private Supplier<ITaskFilter> filterSupplier; // set by wireTo(...)
+    private ExportHandler exportHandler; // set by wireTo(...)
 
     /** Constructs the toolbox panel with the 6-section layout. */
     public ToolBox() {
@@ -105,7 +131,7 @@ public final class ToolBox extends RoundedPanel {
         root.gridy = 5; root.weighty = 0.15;
         add(buildSection6_Export(), root);
 
-        // Placeholder actions (no VM).
+        // Default placeholders (no API bound yet).
         wirePlaceholders();
     }
 
@@ -202,7 +228,6 @@ public final class ToolBox extends RoundedPanel {
         styleSmallFilled(sortApplyBtn, AppTheme.TB_SORT_APPLY_BG, AppTheme.TB_SORT_APPLY_FG);
         styleSmallFilled(sortResetBtn, AppTheme.TB_SORT_RESET_BG, AppTheme.TB_SORT_RESET_FG);
 
-        // שים ישירות כדי לחלק רוחב שווה
         bottom.add(sortApplyBtn);
         bottom.add(sortResetBtn);
 
@@ -248,7 +273,6 @@ public final class ToolBox extends RoundedPanel {
                 AppTheme.TB_SHOW_BORDER, AppTheme.TB_SHOW_FG,
                 AppTheme.TB_SHOW_SELECTED_BG, AppTheme.TB_SHOW_SELECTED_FG);
 
-        // Compact sizing + bigger font בזכות padding מוקטן
         Dimension smallBtn = new Dimension(90, 28);
         filterApplyBtn.setPreferredSize(smallBtn);
         filterResetBtn.setPreferredSize(smallBtn);
@@ -310,10 +334,10 @@ public final class ToolBox extends RoundedPanel {
     }
 
     // ---------------------------------------------------------------------
-    // Wiring (placeholders only — no VM)
+    // Wiring (placeholders by default, real VM via wireTo(...))
     // ---------------------------------------------------------------------
 
-    /** Wires placeholder actions for all buttons (no ViewModel). */
+    /** Default placeholder wiring (kept for backward compatibility). */
     private void wirePlaceholders() {
         undoBtn.addActionListener(e ->
                 JOptionPane.showMessageDialog(this, "Undo (placeholder)", "Undo", JOptionPane.INFORMATION_MESSAGE));
@@ -345,25 +369,116 @@ public final class ToolBox extends RoundedPanel {
         });
 
         if (exportBtn != null) {
-            exportBtn.addActionListener(e -> onExport());
+            exportBtn.addActionListener(e -> onExportPlaceholder());
         }
     }
 
-    /** Opens ExportDialog (adjust the constructor if your dialog requires different args). */
-    private void onExport() {
-        try {
-            ExportDialog dlg = new ExportDialog((Frame) SwingUtilities.getWindowAncestor(this));
-            dlg.setModal(true);
-            dlg.setResizable(false);
-            dlg.pack();
-            dlg.setLocationRelativeTo(this);
-            dlg.setVisible(true);
-            dlg.dispose();
-        } catch (Throwable ex) {
-            JOptionPane.showMessageDialog(this,
-                    "Failed to open ExportDialog. Please adjust the import/constructor.",
-                    "Export", JOptionPane.ERROR_MESSAGE);
+    /**
+     * Binds this ToolBox to the provided API and UI-side providers without guessing any implementation detail.
+     * After calling this method, all buttons call the real VM operations instead of placeholders.
+     *
+     * @param api             UI-exposed API adapter for the ViewModel
+     * @param idsProvider     supplier for currently selected task IDs and counters
+     * @param sortMapper      maps combo selection ("", "Title", "State", "ID") to a SortStrategy (null clears)
+     * @param filterSupplier  builds the current combinator filter (null clears)
+     * @param exportHandler   handles the export interaction (dialog + api calls)
+     */
+    public void wireTo(TasksViewAPI api,
+                       IdsProvider idsProvider,
+                       Function<String, SortStrategy> sortMapper,
+                       Supplier<ITaskFilter> filterSupplier,
+                       ExportHandler exportHandler) {
+
+        this.api = Objects.requireNonNull(api, "api");
+        this.idsProvider = Objects.requireNonNull(idsProvider, "idsProvider");
+        this.sortMapper = Objects.requireNonNull(sortMapper, "sortMapper");
+        this.filterSupplier = Objects.requireNonNull(filterSupplier, "filterSupplier");
+        this.exportHandler = Objects.requireNonNull(exportHandler, "exportHandler");
+
+        // Clear previous listeners (keep it simple by replacing ActionListeners)
+        for (var l : undoBtn.getActionListeners()) undoBtn.removeActionListener(l);
+        for (var l : redoBtn.getActionListeners()) redoBtn.removeActionListener(l);
+        for (var l : advanceBtn.getActionListeners()) advanceBtn.removeActionListener(l);
+        for (var l : markAsBtn.getActionListeners()) markAsBtn.removeActionListener(l);
+        for (var l : sortApplyBtn.getActionListeners()) sortApplyBtn.removeActionListener(l);
+        for (var l : sortResetBtn.getActionListeners()) sortResetBtn.removeActionListener(l);
+        for (var l : filterApplyBtn.getActionListeners()) filterApplyBtn.removeActionListener(l);
+        for (var l : filterResetBtn.getActionListeners()) filterResetBtn.removeActionListener(l);
+        for (var l : showFilteredTgl.getActionListeners()) showFilteredTgl.removeActionListener(l);
+        if (exportBtn != null) for (var l : exportBtn.getActionListeners()) exportBtn.removeActionListener(l);
+
+        // ---- Core ops ----
+        undoBtn.addActionListener(e -> this.api.undo());
+        redoBtn.addActionListener(e -> this.api.redo());
+
+        advanceBtn.addActionListener(e -> {
+            int[] ids = safeIds();
+            for (int id : ids) this.api.advanceState(id);
+        });
+
+        markAsBtn.addActionListener(e -> showMarkPopup());
+
+        // ---- Sorting ----
+        sortApplyBtn.addActionListener(e -> {
+            String key = Optional.ofNullable((String) sortCombo.getSelectedItem()).orElse("");
+            this.api.setSortStrategy(this.sortMapper.apply(key));
+        });
+        sortResetBtn.addActionListener(e -> {
+            sortCombo.setSelectedIndex(0);
+            this.api.setSortStrategy(null);
+        });
+
+        // ---- Filtering ----
+        filterApplyBtn.addActionListener(e -> this.api.setFilter(this.filterSupplier.get()));
+        filterResetBtn.addActionListener(e -> {
+            cbTodo.setSelected(false);
+            cbInProgress.setSelected(false);
+            cbCompleted.setSelected(false);
+            this.api.clearFilter();
+        });
+        showFilteredTgl.addActionListener(e -> {
+            boolean on = showFilteredTgl.isSelected();
+            showFilteredTgl.setOpaque(on);
+            showFilteredTgl.setBackground(on ? AppTheme.TB_SHOW_SELECTED_BG : new Color(0, 0, 0, 0));
+            showFilteredTgl.setForeground(on ? AppTheme.TB_SHOW_SELECTED_FG : AppTheme.TB_SHOW_FG);
+            // Consumers of this toggle should read its state via getter when executing actions.
+            // No API call is made here by design.
+        });
+
+        // ---- Export ----
+        if (exportBtn != null) {
+            exportBtn.addActionListener(e -> this.exportHandler.performExport(
+                    this.api,
+                    showFilteredTgl.isSelected(),
+                    safeIds()
+            ));
         }
+    }
+
+    /** Shows a simple popup to select target TaskState, then calls api.markState for each selected id. */
+    private void showMarkPopup() {
+        if (api == null) return; // not bound
+        JPopupMenu menu = new JPopupMenu();
+        for (TaskState s : TaskState.values()) {
+            JMenuItem mi = new JMenuItem(s.name());
+            mi.addActionListener(e2 -> {
+                int[] ids = safeIds();
+                for (int id : ids) api.markState(id, s);
+            });
+            menu.add(mi);
+        }
+        menu.show(markAsBtn, markAsBtn.getWidth() / 2, markAsBtn.getHeight());
+    }
+
+    /** Placeholder export when not bound to API (kept for backwards compatibility). */
+    private void onExportPlaceholder() {
+        JOptionPane.showMessageDialog(this,
+                "Export (placeholder). Use wireTo(...) to connect real export flow.",
+                "Export", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private int[] safeIds() {
+        return (idsProvider != null) ? idsProvider.selectedIds() : new int[0];
     }
 
     // ---------------------------------------------------------------------
@@ -439,7 +554,6 @@ public final class ToolBox extends RoundedPanel {
                 BorderFactory.createEmptyBorder(4, 6, 4, 6)               // tighter padding
         ));
         b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        // Initial state OFF
         b.setBackground(new Color(0, 0, 0, 0));
         if (b instanceof JToggleButton tgl) {
             tgl.addItemListener(e -> {
@@ -473,6 +587,12 @@ public final class ToolBox extends RoundedPanel {
     // Public API (for MVVM wiring)
     // ---------------------------------------------------------------------
 
+    /** Updates the counters text (call from outside when selection/rows change). */
+    public void updateCounters(int selected, int total) {
+        selectedCountLbl.setText("Selected: " + Math.max(0, selected));
+        totalCountLbl.setText("Total: " + Math.max(0, total));
+    }
+
     public JButton getUndoButton() { return undoBtn; }
     public JButton getRedoButton() { return redoBtn; }
     public JButton getAdvanceButton() { return advanceBtn; }
@@ -489,4 +609,108 @@ public final class ToolBox extends RoundedPanel {
     public JLabel getSelectedCountLabel() { return selectedCountLbl; }
     public JLabel getTotalCountLabel() { return totalCountLbl; }
     public JButton getExportButton() { return exportBtn; }
+
+
+    // ---------------------------------------------------------------------
+    // Backward-compatible wiring
+    // ---------------------------------------------------------------------
+
+// ---- Add these setters (optional wiring in small steps) ----
+    /** Backward-compatible hook for existing code that calls setApi(api). */
+    public void setApi(TasksViewAPI api) {
+        this.api = Objects.requireNonNull(api, "api");
+        // Minimal safe wiring that doesn't assume anything about selection/filter/export.
+        // Buttons that don't require extra providers are bound now; others remain as-is
+        // until you call the extra setters or wireTo(...).
+
+        // Clear previous listeners for these buttons only
+        for (var l : undoBtn.getActionListeners()) undoBtn.removeActionListener(l);
+        for (var l : redoBtn.getActionListeners()) redoBtn.removeActionListener(l);
+        for (var l : sortResetBtn.getActionListeners()) sortResetBtn.removeActionListener(l);
+        for (var l : filterResetBtn.getActionListeners()) filterResetBtn.removeActionListener(l);
+
+        // Bind core ops that don't need extra context
+        undoBtn.addActionListener(e -> this.api.undo());
+        redoBtn.addActionListener(e -> this.api.redo());
+
+        // Sort reset = clear strategy (safe, no mapper needed)
+        sortResetBtn.addActionListener(e -> {
+            sortCombo.setSelectedIndex(0);
+            this.api.setSortStrategy(null);
+        });
+
+        // Filter reset = clear filter (safe, no supplier needed)
+        filterResetBtn.addActionListener(e -> {
+            cbTodo.setSelected(false);
+            cbInProgress.setSelected(false);
+            cbCompleted.setSelected(false);
+            this.api.clearFilter();
+        });
+
+        // Note: advance/mark/sort-apply/filter-apply/export stay with their current listeners
+        // until you provide the missing context via the setters below or wireTo(...).
+    }
+
+    /** Provide selected IDs when you’re ready (e.g., from table). */
+    public void setIdsProvider(IdsProvider idsProvider) {
+        this.idsProvider = Objects.requireNonNull(idsProvider, "idsProvider");
+    }
+
+    /** Provide a mapper from combo value ("", "Title", "State", "ID") to SortStrategy. */
+    public void setSortMapper(Function<String, SortStrategy> sortMapper) {
+        this.sortMapper = Objects.requireNonNull(sortMapper, "sortMapper");
+        // Rebind sortApply to use mapper
+        for (var l : sortApplyBtn.getActionListeners()) sortApplyBtn.removeActionListener(l);
+        sortApplyBtn.addActionListener(e -> {
+            String key = (String) sortCombo.getSelectedItem();
+            this.api.setSortStrategy(this.sortMapper.apply(key == null ? "" : key));
+        });
+    }
+
+    /** Provide a supplier that builds the current combinator filter. */
+    public void setFilterSupplier(Supplier<ITaskFilter> filterSupplier) {
+        this.filterSupplier = Objects.requireNonNull(filterSupplier, "filterSupplier");
+        // Rebind filterApply to use supplier
+        for (var l : filterApplyBtn.getActionListeners()) filterApplyBtn.removeActionListener(l);
+        filterApplyBtn.addActionListener(e -> this.api.setFilter(this.filterSupplier.get()));
+    }
+
+    /** Provide an export handler that opens your dialog and calls the API. */
+    public void setExportHandler(ExportHandler exportHandler) {
+        this.exportHandler = Objects.requireNonNull(exportHandler, "exportHandler");
+        if (exportBtn != null) {
+            for (var l : exportBtn.getActionListeners()) exportBtn.removeActionListener(l);
+            exportBtn.addActionListener(e ->
+                    this.exportHandler.performExport(this.api, showFilteredTgl.isSelected(), safeIds()));
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Small UI-side helper contracts
+    // ---------------------------------------------------------------------
+
+    /**
+     * Provides selected IDs and counters from the center content.
+     * Implement this at the UI layer (e.g., by delegating to your table component).
+     */
+    @FunctionalInterface
+    public interface IdsProvider {
+        /** @return currently selected task IDs (empty if none). */
+        int[] selectedIds();
+        // If you need more later, prefer adding separate setters on ToolBox (e.g., updateCounters).
+    }
+
+    /**
+     * Handles the export interaction (dialog + API calls). Kept outside the ToolBox to avoid guessing dialog signatures.
+     */
+    @FunctionalInterface
+    public interface ExportHandler {
+        /**
+         * Performs the export using the given API.
+         * @param api UI API
+         * @param useFiltered whether the toggle "Show Filtered" is ON
+         * @param selectedIds currently selected IDs (may be empty)
+         */
+        void performExport(TasksViewAPI api, boolean useFiltered, int[] selectedIds);
+    }
 }

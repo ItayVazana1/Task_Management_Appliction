@@ -134,12 +134,6 @@ public final class TestAPI {
         vm.clearFilter();
         exportAll(vm, name(stepNo, "after_clear_filter_sort"));
 
-        // 13) Final: deleteAll + export empty
-        step(stepNo++, "deleteAll (final)");
-        vm.deleteAll();
-        vm.reload();
-        exportAll(vm, name(stepNo, "final_empty"));
-
         // Write consolidated run log
         writeRunLog();
 
