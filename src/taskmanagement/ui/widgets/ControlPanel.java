@@ -11,46 +11,55 @@ import java.lang.reflect.Constructor;
 
 /**
  * ControlPanel
- * Three rounded square buttons (Add, Edit, Delete), each size=AppTheme.CTRL_BLOCK_SIZE,
- * centered in the middle of each vertical third of the panel.
- * Each button shows an icon on top (from resources) and text at the bottom.
- *
- * Adjustments:
- * - Fixed sidebar width: preferred == minimum so the center panel cannot steal space.
- * - Subtle inner padding so buttons don't stick to the edge.
- * - Safe icon loading (panel still renders even if an icon is missing).
- *
- * Behavior (temporary, no-VM):
- * - Add/Edit → tries to open TaskEditorDialog reflectively (several package candidates).
- *              If missing → shows a minimal placeholder dialog and closes.
- * - Delete   → confirm dialog, then info message (no-op).
+ * <p>
+ * Left rail with five large square buttons arranged in vertical fifths:
+ * Refresh, Add, Edit, Delete, Disk Cleanup. Each button shows an icon above
+ * and a text label below. Width is locked (preferred == minimum) so the
+ * center content cannot steal space. Icons are loaded safely with a fallback
+ * 1x1 transparent icon if missing.
+ * <p>
+ * Current behavior is placeholder-only (no ViewModel wiring yet):
+ * <ul>
+ *   <li>Refresh: info placeholder (to be wired to vm.reload()).</li>
+ *   <li>Add/Edit: tries to open TaskEditorDialog reflectively, else shows
+ *       a small placeholder dialog.</li>
+ *   <li>Delete: confirm selected deletion (placeholder).</li>
+ *   <li>Disk Cleanup: confirm deleting ALL tasks (placeholder).</li>
+ * </ul>
  */
 public class ControlPanel extends RoundedPanel {
 
-    /** Horizontal padding inside the panel (px). */
+    /** Horizontal padding inside the rail (px). */
     private static final int INNER_PAD = 8;
-    /** Fallback width if ContentArea does not lock width externally. */
+
+    /** Fallback width if the parent layout does not constrain the rail. */
     private static final int FALLBACK_WIDTH = 220;
 
+    private final JButton refreshBtn;
     private final JButton addBtn;
     private final JButton editBtn;
     private final JButton deleteBtn;
+    private final JButton cleanupBtn;
 
+    /**
+     * Creates the left control rail with five vertically-centered blocks.
+     * Colors and sizes are taken from {@link AppTheme}.
+     */
     public ControlPanel() {
         super(new Color(0x2C2C2C), 16);
         setOpaque(false);
 
-        // --- Lock a sane sidebar width (preferred == minimum) ---
-        int block = AppTheme.CTRL_BLOCK_SIZE; // expected to be a square button size
+        // Lock rail width (preferred == minimum).
+        int block = AppTheme.CTRL_BLOCK_SIZE;
         int fixedWidth = Math.max(FALLBACK_WIDTH, block + INNER_PAD * 2);
         Dimension fixed = new Dimension(fixedWidth, 10);
         setPreferredSize(fixed);
         setMinimumSize(fixed);
 
-        // Optional inner padding so the rounded background breathes.
+        // Inner breathing space.
         setBorder(BorderFactory.createEmptyBorder(INNER_PAD, INNER_PAD, INNER_PAD, INNER_PAD));
 
-        // --- Layout: 3 rows, each vertically centered within its third ---
+        // 5 rows, vertically distributed.
         setLayout(new GridBagLayout());
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.gridx = 0;
@@ -59,123 +68,159 @@ public class ControlPanel extends RoundedPanel {
         gbc.weightx = 1.0;
         gbc.insets = new Insets(0, 0, 0, 0);
 
-        // Load icons from resources/taskmanagement.ui_test/icons/ (safe fallback if null)
-        Icon addIcon  = safeIcon(UiUtils.loadRasterIcon(
+        // Load icons (safe fallback if missing)
+        Icon refreshIcon = safeIcon(UiUtils.loadRasterIcon(
+                "/taskmanagement/ui/resources/refresh.png",  // ← שים את האייקון ב-resources
+                AppTheme.CTRL_ICON_SIZE, AppTheme.CTRL_ICON_SIZE));
+        Icon addIcon = safeIcon(UiUtils.loadRasterIcon(
                 "/taskmanagement/ui/resources/add.png",
                 AppTheme.CTRL_ICON_SIZE, AppTheme.CTRL_ICON_SIZE));
-
         Icon editIcon = safeIcon(UiUtils.loadRasterIcon(
                 "/taskmanagement/ui/resources/edit.png",
                 AppTheme.CTRL_ICON_SIZE, AppTheme.CTRL_ICON_SIZE));
-
-        Icon delIcon  = safeIcon(UiUtils.loadRasterIcon(
+        Icon delIcon = safeIcon(UiUtils.loadRasterIcon(
                 "/taskmanagement/ui/resources/delete.png",
                 AppTheme.CTRL_ICON_SIZE, AppTheme.CTRL_ICON_SIZE));
+        Icon cleanupIcon = safeIcon(UiUtils.loadRasterIcon(
+                "/taskmanagement/ui/resources/cleanup.png",
+                AppTheme.CTRL_ICON_SIZE, AppTheme.CTRL_ICON_SIZE));
 
+        // Row 0: Refresh
+        refreshBtn = UiUtils.createPaintedRoundedIconButton(
+                "Refresh", refreshIcon,
+                AppTheme.CTRL_REFRESH_BG, AppTheme.CTRL_REFRESH_FG,
+                AppTheme.CTRL_BLOCK_SIZE, AppTheme.CTRL_CORNER_RAD, AppTheme.CTRL_FONT_SIZE
+        );
+        refreshBtn.setActionCommand("REFRESH");
+        refreshBtn.setToolTipText("Refresh tasks");
+        refreshBtn.setAlignmentX(LEFT_ALIGNMENT);
+        gbc.gridy = 0;
+        gbc.weighty = 1.0;
+        add(refreshBtn, gbc);
 
-        // Row 0: Add
+        // Row 1: Add
         addBtn = UiUtils.createPaintedRoundedIconButton(
-                "Add",
-                addIcon,
-                AppTheme.CTRL_ADD_BG,
-                AppTheme.CTRL_ADD_FG,
-                AppTheme.CTRL_BLOCK_SIZE,
-                AppTheme.CTRL_CORNER_RAD,
-                AppTheme.CTRL_FONT_SIZE
+                "Add", addIcon,
+                AppTheme.CTRL_ADD_BG, AppTheme.CTRL_ADD_FG,
+                AppTheme.CTRL_BLOCK_SIZE, AppTheme.CTRL_CORNER_RAD, AppTheme.CTRL_FONT_SIZE
         );
         addBtn.setActionCommand("ADD");
         addBtn.setToolTipText("Add");
         addBtn.setAlignmentX(LEFT_ALIGNMENT);
-        gbc.gridy = 0;
+        gbc.gridy = 1;
         gbc.weighty = 1.0;
         add(addBtn, gbc);
 
-        // Row 1: Edit
+        // Row 2: Edit
         editBtn = UiUtils.createPaintedRoundedIconButton(
-                "Edit",
-                editIcon,
-                AppTheme.CTRL_EDIT_BG,
-                AppTheme.CTRL_EDIT_FG,
-                AppTheme.CTRL_BLOCK_SIZE,
-                AppTheme.CTRL_CORNER_RAD,
-                AppTheme.CTRL_FONT_SIZE
+                "Edit", editIcon,
+                AppTheme.CTRL_EDIT_BG, AppTheme.CTRL_EDIT_FG,
+                AppTheme.CTRL_BLOCK_SIZE, AppTheme.CTRL_CORNER_RAD, AppTheme.CTRL_FONT_SIZE
         );
         editBtn.setActionCommand("EDIT");
         editBtn.setToolTipText("Edit");
         editBtn.setAlignmentX(LEFT_ALIGNMENT);
-        gbc.gridy = 1;
+        gbc.gridy = 2;
         gbc.weighty = 1.0;
         add(editBtn, gbc);
 
-        // Row 2: Delete
+        // Row 3: Delete
         deleteBtn = UiUtils.createPaintedRoundedIconButton(
-                "Delete",
-                delIcon,
-                AppTheme.CTRL_DELETE_BG,
-                AppTheme.CTRL_DELETE_FG,
-                AppTheme.CTRL_BLOCK_SIZE,
-                AppTheme.CTRL_CORNER_RAD,
-                AppTheme.CTRL_FONT_SIZE
+                "Delete", delIcon,
+                AppTheme.CTRL_DELETE_BG, AppTheme.CTRL_DELETE_FG,
+                AppTheme.CTRL_BLOCK_SIZE, AppTheme.CTRL_CORNER_RAD, AppTheme.CTRL_FONT_SIZE
         );
         deleteBtn.setActionCommand("DELETE");
         deleteBtn.setToolTipText("Delete");
         deleteBtn.setAlignmentX(LEFT_ALIGNMENT);
-        gbc.gridy = 2;
+        gbc.gridy = 3;
         gbc.weighty = 1.0;
         add(deleteBtn, gbc);
 
-        // Wire actions (no-VM)
-        wireActions();
+        // Row 4: Disk Cleanup (Delete All)
+        cleanupBtn = UiUtils.createPaintedRoundedIconButton(
+                "Cleanup", cleanupIcon,
+                AppTheme.CTRL_CLEANUP_BG, AppTheme.CTRL_CLEANUP_FG,
+                AppTheme.CTRL_BLOCK_SIZE, AppTheme.CTRL_CORNER_RAD, AppTheme.CTRL_FONT_SIZE
+        );
+        cleanupBtn.setActionCommand("CLEANUP");
+        cleanupBtn.setToolTipText("Delete ALL tasks");
+        cleanupBtn.setAlignmentX(LEFT_ALIGNMENT);
+        gbc.gridy = 4;
+        gbc.weighty = 1.0;
+        add(cleanupBtn, gbc);
+
+        wireActions(); // placeholders for now
     }
 
-    // --------------------------- Actions ---------------------------
+    // --------------------------- Actions (placeholders) ---------------------------
 
     private void wireActions() {
+        refreshBtn.addActionListener(this::onRefresh);
         addBtn.addActionListener(this::onAdd);
         editBtn.addActionListener(this::onEdit);
         deleteBtn.addActionListener(this::onDelete);
+        cleanupBtn.addActionListener(this::onCleanupAll);
+    }
+
+    private void onRefresh(ActionEvent e) {
+        JOptionPane.showMessageDialog(
+                getOwnerComponent(),
+                "Refresh (placeholder — will call vm.reload()).",
+                "Refresh",
+                JOptionPane.INFORMATION_MESSAGE
+        );
     }
 
     private void onAdd(ActionEvent e) {
-        boolean opened = openEditorDialogReflectively("add");
-        if (!opened) {
-            showPlaceholderDialog("Add Task",
-                    "Add mode placeholder (no ViewModel wired yet).");
+        if (!openEditorDialogReflectively("add")) {
+            showPlaceholderDialog("Add Task", "Add mode placeholder (no VM wiring yet).");
         }
     }
 
     private void onEdit(ActionEvent e) {
-        boolean opened = openEditorDialogReflectively("edit");
-        if (!opened) {
-            showPlaceholderDialog("Edit Task",
-                    "Edit mode placeholder (no selection / VM wired yet).");
+        if (!openEditorDialogReflectively("edit")) {
+            showPlaceholderDialog("Edit Task", "Edit mode placeholder (no VM wiring yet).");
         }
     }
 
     private void onDelete(ActionEvent e) {
-        if (showConfirmDelete()) {
+        if (showConfirmDeleteSelected()) {
             JOptionPane.showMessageDialog(
                     getOwnerComponent(),
-                    "Deleted (no-op for now).",
+                    "Deleted selected (placeholder — will call vm.deleteSelected()).",
                     "Delete",
                     JOptionPane.INFORMATION_MESSAGE
             );
         }
     }
 
-    // --------------------------- Reflective dialog open ---------------------------
+    private void onCleanupAll(ActionEvent e) {
+        if (showConfirmDeleteAll()) {
+            JOptionPane.showMessageDialog(
+                    getOwnerComponent(),
+                    "All tasks deleted (placeholder — will call vm.deleteAll()).",
+                    "Disk Cleanup",
+                    JOptionPane.WARNING_MESSAGE
+            );
+        }
+    }
+
+    // --------------------------- Reflective dialog opening ---------------------------
 
     /**
-     * Tries to open TaskEditorDialog using several FQCN candidates and common ctors:
-     * (Frame,String), (Dialog,String), (Frame), (Dialog), ().
-     * Makes it modal, non-resizable, packed and centered.
+     * Attempts to open TaskEditorDialog with common constructors:
+     * (Frame,String), (Dialog,String), (Frame), (Dialog), or default ().
+     * Dialog is modal, non-resizable, packed and centered.
      *
      * @param mode "add" or "edit"
-     * @return true if opened successfully; false for fallback.
+     * @return true if dialog was instantiated and shown.
      */
     private boolean openEditorDialogReflectively(String mode) {
         final String[] candidates = {
                 "taskmanagement.ui_test.dialogs.TaskEditorDialog",
+                "taskmanagement.ui.views.dialogs.TaskEditorDialog",
+                "taskmanagement.ui.dialogs.TaskEditorDialog"
         };
         Window owner = getOwnerWindow();
 
@@ -225,9 +270,7 @@ public class ControlPanel extends RoundedPanel {
                     configureAndShowDialog(dlg, titleForMode(mode));
                     return true;
                 }
-            } catch (Throwable ignored) {
-                // try next candidate
-            }
+            } catch (Throwable ignored) { /* try next candidate */ }
         }
         return false;
     }
@@ -237,11 +280,8 @@ public class ControlPanel extends RoundedPanel {
     }
 
     private Constructor<?> getCtor(Class<?> clazz, Class<?>... params) {
-        try {
-            return clazz.getConstructor(params);
-        } catch (NoSuchMethodException ex) {
-            return null;
-        }
+        try { return clazz.getConstructor(params); }
+        catch (NoSuchMethodException ex) { return null; }
     }
 
     private void configureAndShowDialog(JDialog dialog, String title) {
@@ -256,10 +296,9 @@ public class ControlPanel extends RoundedPanel {
 
     // --------------------------- Helpers ---------------------------
 
-    /** Returns a non-null icon (empty 1×1 transparent) if the provided icon is null. */
+    /** Ensures a non-null icon by returning a 1×1 transparent fallback. */
     private static Icon safeIcon(Icon icon) {
         if (icon != null) return icon;
-        // Minimal transparent icon to keep layout stable if resource is missing.
         return new Icon() {
             @Override public void paintIcon(Component c, Graphics g, int x, int y) { /* no-op */ }
             @Override public int getIconWidth() { return 1; }
@@ -267,7 +306,7 @@ public class ControlPanel extends RoundedPanel {
         };
     }
 
-    /** Small placeholder modal if TaskEditorDialog is absent. */
+    /** Tiny placeholder modal used when the real editor dialog is absent. */
     private void showPlaceholderDialog(String title, String message) {
         JDialog dlg = new JDialog(getOwnerWindow(), title, Dialog.ModalityType.APPLICATION_MODAL);
         dlg.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
@@ -291,8 +330,8 @@ public class ControlPanel extends RoundedPanel {
         dlg.dispose();
     }
 
-    /** Confirm delete dialog (customizable later). */
-    private boolean showConfirmDelete() {
+    /** Confirmation for deleting selected tasks. */
+    private boolean showConfirmDeleteSelected() {
         int ans = JOptionPane.showConfirmDialog(
                 getOwnerComponent(),
                 "Delete selected task(s)?",
@@ -303,15 +342,26 @@ public class ControlPanel extends RoundedPanel {
         return ans == JOptionPane.OK_OPTION;
     }
 
-    public JButton getAddButton()    { return addBtn; }
-    public JButton getEditButton()   { return editBtn; }
-    public JButton getDeleteButton() { return deleteBtn; }
-
-    private Component getOwnerComponent() {
-        return this;
+    /** Confirmation for deleting ALL tasks. */
+    private boolean showConfirmDeleteAll() {
+        int ans = JOptionPane.showConfirmDialog(
+                getOwnerComponent(),
+                "Delete ALL tasks? This cannot be undone.",
+                "Disk Cleanup",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE
+        );
+        return ans == JOptionPane.YES_OPTION;
     }
 
-    private Window getOwnerWindow() {
-        return SwingUtilities.getWindowAncestor(this);
-    }
+    // --------------------------- Accessors for wiring ---------------------------
+
+    public JButton getRefreshButton() { return refreshBtn; }
+    public JButton getAddButton()     { return addBtn; }
+    public JButton getEditButton()    { return editBtn; }
+    public JButton getDeleteButton()  { return deleteBtn; }
+    public JButton getCleanupButton() { return cleanupBtn; }
+
+    private Component getOwnerComponent() { return this; }
+    private Window getOwnerWindow() { return SwingUtilities.getWindowAncestor(this); }
 }

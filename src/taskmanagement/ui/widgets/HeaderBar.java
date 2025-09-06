@@ -36,7 +36,7 @@ public class HeaderBar extends JPanel {
 
         // ---- Left (title ~60%) ----
         titleLabel = new JLabel("Task Management App");
-        titleLabel.setForeground(AppTheme.IOS_ORANGE);
+        titleLabel.setForeground(AppTheme.ACCENT_SECONDARY);
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, AppTheme.TITLE_FONT));
         titleLabel.setHorizontalAlignment(SwingConstants.LEFT);
 
