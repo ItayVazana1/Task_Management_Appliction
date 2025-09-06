@@ -12,8 +12,13 @@ import taskmanagement.domain.TaskState;
 import taskmanagement.domain.filter.ITaskFilter;
 import taskmanagement.ui.api.TasksViewAPI;
 
+// ===== Export wiring =====
+import taskmanagement.ui.dialogs.ExportDialog;
+import taskmanagement.application.viewmodel.ExportFormat;
+
 import javax.swing.*;
 import java.awt.*;
+import java.nio.file.Path;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -22,6 +27,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.IntStream;
 
 /**
  * ToolBox
@@ -343,16 +349,15 @@ public final class ToolBox extends RoundedPanel {
         advanceBtn.addActionListener(e -> JOptionPane.showMessageDialog(this,"Advance (placeholder)","Advance",JOptionPane.INFORMATION_MESSAGE));
         markAsBtn.addActionListener(e -> JOptionPane.showMessageDialog(this,"Mark as… (placeholder)","Mark",JOptionPane.INFORMATION_MESSAGE));
 
-        // IMPORTANT: no placeholder wiring for Sort Apply/Reset — real wiring happens in setSortMapper()
-
         // Filter placeholders (replaced by bindFilterControls / setFilterSupplier)
         filterApplyBtn.addActionListener(e -> JOptionPane.showMessageDialog(this,"Filter Apply (placeholder)","Filter",JOptionPane.INFORMATION_MESSAGE));
         filterResetBtn.addActionListener(e -> JOptionPane.showMessageDialog(this,"Filter Reset (placeholder)","Filter",JOptionPane.INFORMATION_MESSAGE));
         showFilteredTgl.addActionListener(e -> updateTotalsFromApi()); // safe: updates counter only
 
+        // Default Export: open ExportDialog and call API (will be replaced if setExportHandler() is used)
         if (exportBtn != null) {
-            exportBtn.addActionListener(e ->
-                    JOptionPane.showMessageDialog(this,"Export (placeholder). Use wireTo(...) to connect.","Export",JOptionPane.INFORMATION_MESSAGE));
+            for (var l : exportBtn.getActionListeners()) exportBtn.removeActionListener(l);
+            exportBtn.addActionListener(e -> openExportDialogAndRun());
         }
     }
 
@@ -395,6 +400,12 @@ public final class ToolBox extends RoundedPanel {
             this.api.clearFilter();
             updateTotalsFromApi();
         });
+
+        // Ensure default export uses dialog if no external handler has been set yet
+        if (exportHandler == null && exportBtn != null) {
+            for (var l : exportBtn.getActionListeners()) exportBtn.removeActionListener(l);
+            exportBtn.addActionListener(e -> openExportDialogAndRun());
+        }
     }
 
     public void setIdsProvider(IdsProvider idsProvider) {
@@ -496,12 +507,13 @@ public final class ToolBox extends RoundedPanel {
         cbCompleted.setSelected(false);
     }
 
+    /** Set external export handler. If missing, default dialog-based export will be used. */
     public void setExportHandler(ExportHandler exportHandler) {
         this.exportHandler = Objects.requireNonNull(exportHandler, "exportHandler");
         if (exportBtn != null) {
             for (var l : exportBtn.getActionListeners()) exportBtn.removeActionListener(l);
             exportBtn.addActionListener(e ->
-                    this.exportHandler.performExport(this.api, showFilteredTgl.isSelected(), safeIds()));
+                    this.exportHandler.performExport(this.api, showFilteredTgl.isSelected(), toIdList(safeIds())));
         }
     }
 
@@ -547,6 +559,36 @@ public final class ToolBox extends RoundedPanel {
         advanceBtn.addActionListener(e -> onAdvance());
         markAsBtn.addActionListener(e -> onMarkAsDialog());
         enableActionButtons();
+    }
+
+    // ---------- Export helpers ----------
+
+    /** Default: open ExportDialog and call the API. Used unless a custom ExportHandler is set. */
+    private void openExportDialogAndRun() {
+        if (api == null) {
+            JOptionPane.showMessageDialog(this,
+                    "Export is not available: API is not wired.",
+                    "Export", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        ExportDialog.showDialog(this).ifPresent(res -> {
+            Path path = res.file().toPath();
+            ExportFormat fmt = res.format();
+            boolean onlyFiltered = showFilteredTgl.isSelected();
+
+            try {
+                List<Integer> ids = toIdList(safeIds());
+                api.exportTasks(path, fmt, onlyFiltered, ids);
+                JOptionPane.showMessageDialog(this,
+                        "Export completed:\n" + path,
+                        "Export", JOptionPane.INFORMATION_MESSAGE);
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this,
+                        "Export failed:\n" + ex.getMessage(),
+                        "Export", JOptionPane.ERROR_MESSAGE);
+            }
+        });
     }
 
     // ---------- Actions ----------
@@ -689,6 +731,12 @@ public final class ToolBox extends RoundedPanel {
         return (idsProvider != null) ? idsProvider.selectedIds() : new int[0];
     }
 
+    private static List<Integer> toIdList(int[] ids) {
+        return (ids == null || ids.length == 0)
+                ? java.util.List.of()
+                : IntStream.of(ids).boxed().toList();
+    }
+
     // ---------- Styling helpers ----------
 
     private static JPanel makeTransparent() {
@@ -821,7 +869,7 @@ public final class ToolBox extends RoundedPanel {
 
     @FunctionalInterface
     public interface ExportHandler {
-        void performExport(TasksViewAPI api, boolean useFiltered, int[] selectedIds);
+        void performExport(TasksViewAPI api, boolean useFiltered, List<Integer> selectedIds);
     }
 
     /** Returns the current TaskState of the task with the given id by checking the preferred list. */
