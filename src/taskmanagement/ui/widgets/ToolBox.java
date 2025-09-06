@@ -14,6 +14,7 @@ import taskmanagement.ui.api.TasksViewAPI;
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -70,7 +71,7 @@ public final class ToolBox extends RoundedPanel {
 
     private final JButton       filterApplyBtn  = new JButton("Apply");
     private final JButton       filterResetBtn  = new JButton("Reset");
-    private final JToggleButton showFilteredTgl = new JToggleButton("Show Filtered");
+    private final JToggleButton showFilteredTgl = new JToggleButton("Count filtered as total");
 
     // === Section 5: Counters (Selected / Total) ===
     private final JLabel selectedCountLbl = new JLabel("Selected: 0", SwingConstants.CENTER);
@@ -217,7 +218,9 @@ public final class ToolBox extends RoundedPanel {
         p.setLayout(new GridBagLayout());
 
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.gridx = 0; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0;
+        gbc.gridx = 0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1.0;
 
         JPanel list = makeTransparent();
         list.setLayout(new GridBagLayout());
@@ -233,29 +236,61 @@ public final class ToolBox extends RoundedPanel {
         r.gridy = 1; list.add(cbInProgress, r);
         r.gridy = 2; list.add(cbCompleted, r);
 
-        gbc.gridy = 0; gbc.weighty = 0.7;
+        gbc.gridy = 0;
+        gbc.weighty = 0.7;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
         p.add(list, gbc);
 
-        JPanel row = makeTransparent();
-        row.setLayout(new GridLayout(1, 3, 2, 0));
+        JPanel buttonsArea = makeTransparent();
+        buttonsArea.setLayout(new GridBagLayout());
 
+        GridBagConstraints bb = new GridBagConstraints();
+        bb.gridx = 0; bb.fill = GridBagConstraints.HORIZONTAL; bb.weightx = 1.0;
+
+        JPanel topRow = makeTransparent();
+        topRow.setLayout(new GridLayout(1, 2, AppTheme.TB_GAP_SM, 0));
         styleSmallFilled(filterApplyBtn, AppTheme.TB_FILTER_APPLY_BG, AppTheme.TB_FILTER_APPLY_FG);
         styleSmallFilled(filterResetBtn, AppTheme.TB_FILTER_RESET_BG, AppTheme.TB_FILTER_RESET_FG);
-        styleSmallHollow(showFilteredTgl,
-                AppTheme.TB_SHOW_BORDER, AppTheme.TB_SHOW_FG,
-                AppTheme.TB_SHOW_SELECTED_BG, AppTheme.TB_SHOW_SELECTED_FG);
 
         Dimension smallBtn = new Dimension(90, 28);
         filterApplyBtn.setPreferredSize(smallBtn);
         filterResetBtn.setPreferredSize(smallBtn);
-        showFilteredTgl.setPreferredSize(smallBtn);
 
-        row.add(filterApplyBtn);
-        row.add(filterResetBtn);
-        row.add(showFilteredTgl);
+        topRow.add(filterApplyBtn);
+        topRow.add(filterResetBtn);
 
-        gbc.gridy = 1; gbc.weighty = 0.3;
-        p.add(row, gbc);
+        bb.gridy = 0;
+        bb.weighty = 0.5;
+        buttonsArea.add(topRow, bb);
+
+        JPanel bottomRow = makeTransparent();
+        bottomRow.setLayout(new GridBagLayout());
+
+        styleSmallHollow(
+                showFilteredTgl,
+                AppTheme.TB_SHOW_BORDER,
+                AppTheme.TB_SHOW_FG,
+                AppTheme.TB_SHOW_SELECTED_BG,
+                AppTheme.TB_SHOW_SELECTED_FG
+        );
+        showFilteredTgl.setText("Count filtered as total \u25BE");
+        showFilteredTgl.setHorizontalAlignment(SwingConstants.CENTER);
+
+        GridBagConstraints bt = new GridBagConstraints();
+        bt.gridx = 0; bt.gridy = 0;
+        bt.insets = new Insets(AppTheme.TB_PAD / 2, AppTheme.TB_PAD, AppTheme.TB_PAD / 2, AppTheme.TB_PAD);
+        bt.fill = GridBagConstraints.HORIZONTAL;
+        bt.weightx = 1.0;
+        bottomRow.add(showFilteredTgl, bt);
+
+        bb.gridy = 1;
+        bb.weighty = 0.5;
+        buttonsArea.add(bottomRow, bb);
+
+        gbc.gridy = 1;
+        gbc.weighty = 0.3;
+        gbc.fill = GridBagConstraints.BOTH;
+        p.add(buttonsArea, gbc);
 
         return p;
     }
@@ -310,7 +345,7 @@ public final class ToolBox extends RoundedPanel {
 
         // IMPORTANT: no placeholder wiring for Sort Apply/Reset — real wiring happens in setSortMapper()
 
-        // Filter placeholders (real wiring provided via setFilterSupplier)
+        // Filter placeholders (replaced by bindFilterControls / setFilterSupplier)
         filterApplyBtn.addActionListener(e -> JOptionPane.showMessageDialog(this,"Filter Apply (placeholder)","Filter",JOptionPane.INFORMATION_MESSAGE));
         filterResetBtn.addActionListener(e -> JOptionPane.showMessageDialog(this,"Filter Reset (placeholder)","Filter",JOptionPane.INFORMATION_MESSAGE));
         showFilteredTgl.addActionListener(e -> updateTotalsFromApi()); // safe: updates counter only
@@ -356,9 +391,7 @@ public final class ToolBox extends RoundedPanel {
 
         // Filter reset stays here
         filterResetBtn.addActionListener(e -> {
-            cbTodo.setSelected(false);
-            cbInProgress.setSelected(false);
-            cbCompleted.setSelected(false);
+            clearFilterUI();
             this.api.clearFilter();
             updateTotalsFromApi();
         });
@@ -416,6 +449,51 @@ public final class ToolBox extends RoundedPanel {
             this.api.setFilter(this.filterSupplier.get());
             updateTotalsFromApi();
         });
+    }
+
+    /** Connects Filter Apply/Reset/Toggle directly to the API based on the checkboxes state. */
+    public void bindFilterControls(TasksViewAPI api) {
+        this.api = Objects.requireNonNull(api, "api");
+
+        for (var l : filterApplyBtn.getActionListeners()) filterApplyBtn.removeActionListener(l);
+        for (var l : filterResetBtn.getActionListeners()) filterResetBtn.removeActionListener(l);
+        for (var l : showFilteredTgl.getActionListeners()) showFilteredTgl.removeActionListener(l);
+
+        filterApplyBtn.addActionListener(e -> {
+            this.api.setFilter(buildFilterFromUI());
+            updateTotalsFromApi();
+        });
+
+        filterResetBtn.addActionListener(e -> {
+            clearFilterUI();
+            this.api.clearFilter();
+            updateTotalsFromApi();
+        });
+
+        showFilteredTgl.addActionListener(e -> updateTotalsFromApi());
+
+        updateTotalsFromApi();
+    }
+
+    /** Builds an OR-composed filter from the selected state checkboxes. */
+    private ITaskFilter buildFilterFromUI() {
+        final EnumSet<TaskState> states = EnumSet.noneOf(TaskState.class);
+        if (cbTodo.isSelected())       states.add(TaskState.ToDo);
+        if (cbInProgress.isSelected()) states.add(TaskState.InProgress);
+        if (cbCompleted.isSelected())  states.add(TaskState.Completed);
+
+        if (states.isEmpty()) {
+            // Pass-through (no filtering)
+            return t -> true;
+        }
+        return t -> t != null && t.getState() != null && states.contains(t.getState());
+    }
+
+    /** Clears filter UI controls. */
+    private void clearFilterUI() {
+        cbTodo.setSelected(false);
+        cbInProgress.setSelected(false);
+        cbCompleted.setSelected(false);
     }
 
     public void setExportHandler(ExportHandler exportHandler) {
@@ -753,9 +831,10 @@ public final class ToolBox extends RoundedPanel {
         if (list != null) {
             for (ITask t : list) if (t.getId() == id) return t.getState();
         }
+        // Fallback: use the opposite list
         list = showFilteredTgl.isSelected()
-                ? api.tasksProperty().getValue()
-                : api.filteredTasksProperty().getValue();
+                ? api.filteredTasksProperty().getValue()
+                : api.tasksProperty().getValue();
         if (list != null) {
             for (ITask t : list) if (t.getId() == id) return t.getState();
         }

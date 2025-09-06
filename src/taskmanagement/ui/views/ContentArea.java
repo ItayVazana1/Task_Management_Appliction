@@ -47,7 +47,7 @@ public final class ContentArea extends JPanel {
     /**
      * Creates a ContentArea with custom column components.
      *
-     * @param leftPanel the left rail widget (may be null to use default)
+     * @param leftPanel  the left rail widget (may be null to use default)
      * @param tasksPanel the center tasks widget (may be null to use default)
      * @param rightPanel the right rail widget (may be null to use default)
      */
@@ -101,8 +101,13 @@ public final class ContentArea extends JPanel {
                 new taskmanagement.application.viewmodel.sort.SortByState()
         ));
 
-        // NOTE: If/when Filter and Export bindings are introduced in ToolBox,
-        // call their bind methods here similarly.
+        // ---- Filter wiring ----
+        // Connect ToolBox Apply/Reset to the API (VM setFilter/clearFilter).
+        this.rightPanel.bindFilterControls(this.api);
+
+        // Optional: initial load so center panel shows data on first display.
+        // Adapter wraps exceptions; no UI popups here.
+        this.api.reload();
     }
 
     // ---------------------------------------------------------------------
