@@ -10,6 +10,7 @@ import taskmanagement.ui.chrome.WindowChrome;
 import taskmanagement.ui.dialogs.AboutDialog;
 import taskmanagement.ui.dialogs.ConfirmExitDialog;
 import taskmanagement.ui.styles.AppTheme;
+import taskmanagement.ui.util.UiUtils;
 import taskmanagement.ui.views.ContentArea;
 import taskmanagement.ui.widgets.HeaderBar;
 
@@ -47,6 +48,13 @@ public final class MainFrame extends JFrame {
             UIManager.setLookAndFeel(new FlatMacDarkLaf());
         } catch (Throwable ignore) {
             // Fallback to default L&F if FlatLaf is unavailable.
+        }
+
+        // ---- App icon ----
+        ImageIcon appIcon = (ImageIcon) UiUtils.loadRasterIcon(
+                "/taskmanagement/ui/resources/tasks_mng.png", 64, 64);
+        if (appIcon != null) {
+            setIconImage(appIcon.getImage());
         }
 
         // ---- MVVM wiring (DAO -> ViewModel -> API) ----

@@ -9,7 +9,7 @@ import java.util.function.Consumer;
 
 /**
  * HeaderBar
- * Left:  title label (~60%)
+ * Left:  app icon + title label (~60%)
  * Right: pill buttons (About / Close) (~40%)
  *
  * Uses AppTheme tokens for colors/sizing and UiUtils.styleHeaderPillButton(...)
@@ -34,15 +34,26 @@ public class HeaderBar extends JPanel {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(AppTheme.HEADER_HPAD, AppTheme.HEADER_HPAD, AppTheme.HEADER_HPAD, AppTheme.HEADER_HPAD);
 
-        // ---- Left (title ~60%) ----
+        // ---- Left (icon + title ~60%) ----
+        JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        leftPanel.setOpaque(false);
+
+        Icon appIcon = UiUtils.loadRasterIcon("/taskmanagement/ui/resources/tasks_mng.png", 40, 40);
+        if (appIcon != null) {
+            JLabel iconLabel = new JLabel(appIcon);
+            leftPanel.add(iconLabel);
+        }
+
         titleLabel = new JLabel("Task Management App");
         titleLabel.setForeground(AppTheme.ACCENT_SECONDARY);
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, AppTheme.TITLE_FONT));
         titleLabel.setHorizontalAlignment(SwingConstants.LEFT);
 
+        leftPanel.add(titleLabel);
+
         gbc.gridx = 0;
         gbc.weightx = 0.60;
-        add(titleLabel, gbc);
+        add(leftPanel, gbc);
 
         // ---- Right (actions ~40%) ----
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, AppTheme.ACTIONS_HGAP, AppTheme.ACTIONS_VGAP));

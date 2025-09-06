@@ -6,6 +6,11 @@ import javax.swing.*;
 import javax.swing.border.Border;
 import java.awt.*;
 
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import java.util.function.Consumer;
+
+
 /**
  * UiUtils
  * -------
@@ -256,6 +261,34 @@ public final class UiUtils {
     // =====================================================================
     // APPEND-ONLY HELPERS (MODERN WIDGETS / TOOLBOX / DIALOGS)
     // =====================================================================
+
+
+    /**
+     * Convenience: create a DocumentListener from a single Runnable for all events.
+     * Usage:
+     *   doc.addDocumentListener(UiUtils.simpleDocListener(() -> { ... }));
+     */
+    public static DocumentListener simpleDocListener(Runnable r) {
+        return new DocumentListener() {
+            @Override public void insertUpdate(DocumentEvent e)  { r.run(); }
+            @Override public void removeUpdate(DocumentEvent e)  { r.run(); }
+            @Override public void changedUpdate(DocumentEvent e) { r.run(); }
+        };
+    }
+
+    /**
+     * Convenience: create a DocumentListener from a Consumer<DocumentEvent>.
+     * Usage:
+     *   doc.addDocumentListener(UiUtils.simpleDocListener(e -> { ... }));
+     */
+    public static DocumentListener simpleDocListener(Consumer<DocumentEvent> c) {
+        return new DocumentListener() {
+            @Override public void insertUpdate(DocumentEvent e)  { c.accept(e); }
+            @Override public void removeUpdate(DocumentEvent e)  { c.accept(e); }
+            @Override public void changedUpdate(DocumentEvent e) { c.accept(e); }
+        };
+    }
+
 
     /**
      * Style a JTextField for dark panels using AppTheme tokens (centered).
@@ -519,4 +552,6 @@ public final class UiUtils {
             }
         });
     }
+
+
 }

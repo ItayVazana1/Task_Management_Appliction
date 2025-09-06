@@ -6,15 +6,17 @@ import taskmanagement.ui.util.RoundedPanel;
 import taskmanagement.ui.util.UiUtils;
 
 import javax.swing.*;
+import javax.swing.border.EmptyBorder;
 import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
  * TaskEditorDialog
  * ----------------
  * Modal dialog for creating or editing a task.
- * The dialog is View-only (MVVM-safe): it collects input and returns it to the caller.
- * The caller is responsible for interacting with the ViewModel (create/update).
+ * View-only (MVVM-safe): collects input and returns it to the caller.
  */
 public final class TaskEditorDialog extends JDialog {
 
@@ -30,15 +32,15 @@ public final class TaskEditorDialog extends JDialog {
     private final Mode mode;
     private final Prefill prefill;
 
-    private final JTextField titleField = new JTextField(20);
-    private final JTextArea descriptionArea = new JTextArea(5, 20);
+    private final JTextField titleField      = new JTextField(28);
+    private final JTextArea  descriptionArea = new JTextArea(6, 28);
     private final JComboBox<TaskState> stateCombo = new JComboBox<>(TaskState.values());
 
+    private final JLabel descCounter = new JLabel("0 / 500");
     private boolean confirmed = false;
 
     /**
      * Constructs the task editor dialog.
-     *
      * @param owner   parent window
      * @param mode    whether this is ADD or EDIT
      * @param prefill initial values (only used for EDIT)
@@ -50,86 +52,175 @@ public final class TaskEditorDialog extends JDialog {
 
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         setResizable(false);
-
         setContentPane(buildContent());
         pack();
         setLocationRelativeTo(owner);
+
+        // Keyboard shortcuts
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+                .put(KeyStroke.getKeyStroke("ESCAPE"), "cancel");
+        getRootPane().getActionMap().put("cancel", new AbstractAction() {
+            @Override public void actionPerformed(ActionEvent e) { onCancel(); }
+        });
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+                .put(KeyStroke.getKeyStroke("ctrl ENTER"), "confirm");
+        getRootPane().getActionMap().put("confirm", new AbstractAction() {
+            @Override public void actionPerformed(ActionEvent e) { onConfirm(); }
+        });
     }
 
-    /**
-     * Builds the UI content (form + actions).
-     */
+    // ---------------------------------------------------------------------
+    // UI
+    // ---------------------------------------------------------------------
+
     private JComponent buildContent() {
-        RoundedPanel root = new RoundedPanel(AppTheme.PANEL_BG, AppTheme.WINDOW_CORNER_ARC);
+        final RoundedPanel root = new RoundedPanel(AppTheme.PANEL_BG, AppTheme.WINDOW_CORNER_ARC);
         root.setLayout(new BorderLayout(0, 12));
-        root.setBorder(BorderFactory.createEmptyBorder(16, 18, 16, 18));
+        root.setBorder(new EmptyBorder(16, 18, 16, 18));
 
-        // Header
-        JLabel header = new JLabel(mode == Mode.ADD ? "Add New Task" : "Edit Task");
-        header.setFont(AppTheme.CTRL_BUTTON_FONT.deriveFont(Font.BOLD, 16f));
-        header.setForeground(AppTheme.MAIN_TEXT);
+        // ===== Header (accent by mode) =====
+        final Color accentBg = (mode == Mode.ADD) ? new Color(0x154734)    // green-ish for Add
+                : new Color(0x1F2A44);   // slate-blue for Edit
+        final Color accentFg = new Color(0xEAF2FF);
 
-        // Form
-        JPanel form = new JPanel();
-        form.setLayout(new BoxLayout(form, BoxLayout.Y_AXIS));
+        final RoundedPanel header = new RoundedPanel(accentBg, AppTheme.WINDOW_CORNER_ARC);
+        header.setLayout(new BorderLayout(10, 0));
+        header.setBorder(new EmptyBorder(10, 12, 10, 12));
+        header.setOpaque(true);
+
+        Icon hdrIcon = UiUtils.loadRasterIcon(
+                mode == Mode.ADD
+                        ? "/taskmanagement/ui/resources/add.png"
+                        : "/taskmanagement/ui/resources/edit.png",
+                22, 22
+        );
+        if (hdrIcon != null) {
+            header.add(new JLabel(hdrIcon), BorderLayout.WEST);
+        }
+
+        JLabel hdrTitle = new JLabel(mode == Mode.ADD ? "Add New Task" : "Edit Task");
+        hdrTitle.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        hdrTitle.setForeground(accentFg);
+
+        JLabel hdrSub = new JLabel(mode == Mode.ADD ? "Create a new task" : "Update existing task details");
+        hdrSub.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        hdrSub.setForeground(new Color(0xCFE0FF));
+
+        JPanel titles = new JPanel();
+        titles.setOpaque(false);
+        titles.setLayout(new BoxLayout(titles, BoxLayout.Y_AXIS));
+        titles.add(hdrTitle);
+        titles.add(Box.createVerticalStrut(2));
+        titles.add(hdrSub);
+        header.add(titles, BorderLayout.CENTER);
+
+        // ===== Form =====
+        JPanel form = new JPanel(new GridBagLayout());
         form.setOpaque(false);
+        GridBagConstraints gc = new GridBagConstraints();
+        gc.insets = new Insets(6, 6, 6, 6);
+        gc.fill = GridBagConstraints.HORIZONTAL;
+        gc.gridx = 0; gc.gridy = 0; gc.weightx = 0;
 
-        // Title field
-        form.add(new JLabel("Title:"));
+        JLabel titleLbl = new JLabel("Title:");
+        titleLbl.setForeground(AppTheme.MAIN_TEXT);
+        form.add(titleLbl, gc);
+
+        gc.gridx = 1; gc.weightx = 1.0;
         UiUtils.styleTextFieldForDarkCentered(titleField);
-        form.add(titleField);
-        form.add(Box.createVerticalStrut(8));
+        titleField.setHorizontalAlignment(SwingConstants.LEFT);
+        form.add(titleField, gc);
 
-        // Description field
-        form.add(new JLabel("Description:"));
+        gc.gridx = 0; gc.gridy++; gc.weightx = 0;
+        JLabel descLbl = new JLabel("Description:");
+        descLbl.setForeground(AppTheme.MAIN_TEXT);
+        form.add(descLbl, gc);
+
+        gc.gridx = 1; gc.weightx = 1.0;
         UiUtils.styleTextArea(descriptionArea);
-        form.add(new JScrollPane(descriptionArea));
-        form.add(Box.createVerticalStrut(8));
+        descriptionArea.setLineWrap(true);
+        descriptionArea.setWrapStyleWord(true);
+        descriptionArea.getDocument().addDocumentListener((UiUtils.simpleDocListener(e -> {
+            int len = descriptionArea.getText().length();
+            if (len > 500) {
+                // hard cap
+                descriptionArea.setText(descriptionArea.getText().substring(0, 500));
+                len = 500;
+            }
+            descCounter.setText(len + " / 500");
+        })));
+        JScrollPane sp = new JScrollPane(descriptionArea);
+        sp.setBorder(BorderFactory.createEmptyBorder());
+        sp.setOpaque(false);
+        sp.getViewport().setOpaque(false);
+        form.add(sp, gc);
 
-        // State combo
-        form.add(new JLabel("State:"));
-        form.add(stateCombo);
+        gc.gridx = 1; gc.gridy++; gc.weightx = 1.0;
+        descCounter.setForeground(new Color(0x8CA0B3));
+        descCounter.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+        descCounter.setHorizontalAlignment(SwingConstants.RIGHT);
+        form.add(descCounter, gc);
+
+        gc.gridx = 0; gc.gridy++; gc.weightx = 0;
+        JLabel stateLbl = new JLabel("State:");
+        stateLbl.setForeground(AppTheme.MAIN_TEXT);
+        form.add(stateLbl, gc);
+
+        gc.gridx = 1; gc.weightx = 1.0;
+        stateCombo.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        form.add(stateCombo, gc);
 
         // Prefill if editing
         if (mode == Mode.EDIT && prefill != null) {
-            titleField.setText(prefill.title());
-            descriptionArea.setText(prefill.description());
+            titleField.setText(Objects.toString(prefill.title(), ""));
+            descriptionArea.setText(Objects.toString(prefill.description(), ""));
             stateCombo.setSelectedItem(prefill.state());
+            descCounter.setText(Math.min(descriptionArea.getText().length(), 500) + " / 500");
+        } else {
+            stateCombo.setSelectedItem(TaskState.ToDo);
         }
 
-        // Actions
-        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        // ===== Actions =====
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         actions.setOpaque(false);
 
-        final JButton okButton = new JButton(mode == Mode.ADD ? "Add" : "Save");
-        UiUtils.styleStableHoverButton(okButton, AppTheme.TB_EXPORT_FG, AppTheme.MAIN_TEXT);
-
         final JButton cancelButton = new JButton("Cancel");
-        UiUtils.styleStableHoverButton(cancelButton, AppTheme.DARK_GREY, AppTheme.MAIN_TEXT);
-
-        okButton.addActionListener(e -> onConfirm());
+        UiUtils.styleStableHoverButton(cancelButton, new Color(0x3B3B3B), AppTheme.MAIN_TEXT);
         cancelButton.addActionListener(e -> onCancel());
+
+        final JButton okButton = new JButton(mode == Mode.ADD ? "Add" : "Save");
+        Color primaryBg = (mode == Mode.ADD) ? new Color(0x2E8B57) : new Color(0x2F7BFF);
+        UiUtils.styleStableHoverButton(okButton, primaryBg, Color.WHITE);
+        okButton.addActionListener(e -> onConfirm());
 
         actions.add(cancelButton);
         actions.add(okButton);
 
+        // Assemble
         root.add(header, BorderLayout.NORTH);
         root.add(form, BorderLayout.CENTER);
         root.add(actions, BorderLayout.SOUTH);
 
         getRootPane().setDefaultButton(okButton);
+        titleField.requestFocusInWindow();
 
         return root;
     }
 
+    // ---------------------------------------------------------------------
+    // Behavior
+    // ---------------------------------------------------------------------
+
     private void onConfirm() {
-        if (titleField.getText().trim().isEmpty()) {
+        final String title = titleField.getText().trim();
+        if (title.isEmpty()) {
             JOptionPane.showMessageDialog(
                     this,
-                    "Title cannot be empty",
+                    "Title cannot be empty.",
                     "Validation Error",
                     JOptionPane.WARNING_MESSAGE
             );
+            titleField.requestFocusInWindow();
             return;
         }
         confirmed = true;
@@ -141,12 +232,16 @@ public final class TaskEditorDialog extends JDialog {
         dispose();
     }
 
+    // ---------------------------------------------------------------------
+    // API
+    // ---------------------------------------------------------------------
+
     /**
      * Displays the dialog modally and returns the user input if confirmed.
      *
-     * @param parent   parent component (for centering)
-     * @param mode     dialog mode (ADD or EDIT)
-     * @param prefill  optional prefilled values for EDIT mode
+     * @param parent  parent component (for centering)
+     * @param mode    dialog mode (ADD or EDIT)
+     * @param prefill optional prefilled values for EDIT mode
      * @return Optional containing EditorResult if user confirmed, otherwise empty
      */
     public static Optional<EditorResult> showDialog(Component parent, Mode mode, Prefill prefill) {
