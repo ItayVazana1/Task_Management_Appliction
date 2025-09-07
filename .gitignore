@@ -1,4 +1,5 @@
 # IntelliJ IDEA
+.venv/
 .idea/
 *.iml
 
@@ -15,9 +16,6 @@ Thumbs.db
 # Local Derby database files
 /tasksdb/
 tasksdb/**
-
-# Helper scripts
-DumpTree.py
 
 # DB logs
 derby.log
