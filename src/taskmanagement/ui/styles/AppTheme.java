@@ -35,11 +35,12 @@ public final class AppTheme {
     /** Global accent color for titles/emphasis (use instead of IOS_ORANGE). */
     public static final Color ACCENT_PRIMARY = Color.BLACK;
     public static final Color ACCENT_SECONDARY = new Color(0xFFFFFF);
+    public static final Color MAIN_APP_TITLE = new Color(0xFFE690);
     /** Legacy accent kept for backward compatibility; prefer ACCENT_PRIMARY. */
     @Deprecated public static final Color IOS_ORANGE  = new Color(0xFFA100);
 
     /** Accent/danger color (iOS-like red). */
-    public static final Color IOS_RED     = new Color(0x9E0D00);
+    public static final Color IOS_RED     = new Color(0x630700);
     /** Light cream color for light pills and highlights. */
     public static final Color CREAM_WHITE = new Color(0xFAFAE1);
     /** Neutral dark grey for panels and rails. */

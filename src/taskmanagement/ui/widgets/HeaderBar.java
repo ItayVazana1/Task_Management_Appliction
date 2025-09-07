@@ -45,7 +45,7 @@ public class HeaderBar extends JPanel {
         }
 
         titleLabel = new JLabel("Task Management App");
-        titleLabel.setForeground(AppTheme.ACCENT_SECONDARY);
+        titleLabel.setForeground(AppTheme.MAIN_APP_TITLE);
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, AppTheme.TITLE_FONT));
         titleLabel.setHorizontalAlignment(SwingConstants.LEFT);
 

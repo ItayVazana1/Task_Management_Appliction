@@ -4,6 +4,8 @@ import taskmanagement.application.viewmodel.events.Property; // strong-typed lis
 import taskmanagement.domain.ITask;
 import taskmanagement.ui.api.TasksViewAPI;
 import taskmanagement.ui.util.RoundedPanel;
+import taskmanagement.ui.dialogs.TaskDetailsDialog;
+
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -429,7 +431,7 @@ public final class TasksPanel extends JPanel {
         ensureSafeFont(more);
         more.setFont(more.getFont().deriveFont(FONT_SIZE_BASE));
         more.setBorder(BorderFactory.createEmptyBorder(2, 6, 2, 6));
-        more.addActionListener(e -> showTaskDialog(row, task));
+        more.addActionListener(e -> TaskDetailsDialog.showDialog(row, task));
         right.add(more, new GridBagConstraints());
         gc.gridx = 2; gc.weightx = 0; gc.insets = new Insets(0, 0, 0, 0);
         row.add(right, gc);
@@ -525,59 +527,6 @@ public final class TasksPanel extends JPanel {
             }
         }
         row.revalidate();
-    }
-
-    // ---------------------------------------------------------------------
-    // Dialog
-    // ---------------------------------------------------------------------
-
-    private void showTaskDialog(Component parent, ITask t) {
-        JDialog dlg = new JDialog(SwingUtilities.getWindowAncestor(parent),
-                "Task Details", Dialog.ModalityType.APPLICATION_MODAL);
-
-        JPanel content = new JPanel(new GridBagLayout());
-        content.setBackground(new Color(46, 46, 46));
-        content.setBorder(new EmptyBorder(16, 16, 16, 16));
-        ensureSafeFont(content);
-
-        GridBagConstraints g = new GridBagConstraints();
-        g.gridx = 0; g.gridy = 0; g.insets = new Insets(4, 4, 4, 4);
-        g.anchor = GridBagConstraints.WEST;
-
-        content.add(dim("Task ID:"), g);
-        g.gridx = 1; content.add(val(String.valueOf(t.getId())), g);
-
-        g.gridx = 0; g.gridy++; content.add(dim("Title:"), g);
-        g.gridx = 1; content.add(val(t.getTitle()), g);
-
-        g.gridx = 0; g.gridy++; content.add(dim("Description:"), g);
-        g.gridx = 1; g.fill = GridBagConstraints.HORIZONTAL; g.weightx = 1.0;
-        JTextArea ta = new JTextArea(t.getDescription());
-        ensureSafeFont(ta);
-        ta.setEditable(false);
-        ta.setLineWrap(true);
-        ta.setWrapStyleWord(true);
-        ta.setBackground(new Color(60, 60, 60));
-        ta.setForeground(new Color(235, 235, 235));
-        ta.setBorder(new EmptyBorder(8, 8, 8, 8));
-        JScrollPane sp = new JScrollPane(ta,
-                ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
-                ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-        sp.setPreferredSize(new Dimension(380, 140));
-        ensureSafeFont(sp);
-        content.add(sp, g);
-
-        g.gridx = 0; g.gridy++; g.gridwidth = 2; g.anchor = GridBagConstraints.CENTER;
-        g.insets = new Insets(16, 4, 4, 4);
-        JButton ok = new JButton("Close");
-        ensureSafeFont(ok);
-        ok.addActionListener(ev -> dlg.dispose());
-        content.add(ok, g);
-
-        dlg.setContentPane(content);
-        dlg.pack();
-        dlg.setLocationRelativeTo(parent);
-        dlg.setVisible(true);
     }
 
     // ---------------------------------------------------------------------
