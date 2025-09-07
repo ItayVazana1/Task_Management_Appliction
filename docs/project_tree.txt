@@ -1,14 +1,8 @@
-Generated: 2025-09-07 14:20:33 (local)
+Generated: 2025-09-07 16:37:26 (local)
 
 Task_Management_Appliction/
+├── .gitattributes [OK]
 ├── .gitignore [OK]
-├── docs/
-│   ├── Final_Design.PNG [OK]
-│   ├── Java_Style_and_doc_guideline.md [OK]
-│   ├── Patterns_Implementation.txt [OK]
-│   ├── Project_TODO.md [OK]
-│   ├── Requirements.md [OK]
-│   └── project_tree.txt [EMPTY]
 ├── lib/
 │   ├── derby.jar [OK]
 │   ├── derbyshared.jar [OK]
@@ -16,27 +10,13 @@ Task_Management_Appliction/
 │   ├── flatlaf-3.6.jar [OK]
 │   ├── hamcrest-core-1.3.jar [OK]
 │   └── junit-4.13.2.jar [OK]
-├── screenshots/
-│   ├── Add_Task_dialog.PNG [OK]
-│   ├── Another_Task_added.PNG [OK]
-│   ├── Another_Task_added_again.PNG [OK]
-│   ├── Change_task_state_to_iprogress.PNG [OK]
-│   ├── Delete_The_first_task.PNG [OK]
-│   ├── Export_tasks.PNG [OK]
-│   ├── NewVersion/
-│   │   └── App.PNG [OK]
-│   ├── Task_added.PNG [OK]
-│   ├── Use_The_Filter.PNG [OK]
-│   └── main_view_empty.PNG [OK]
 └── src/
     ├── taskmanagement/
-    │   ├── TestAPI.java [OK]
     │   ├── app/
     │   │   └── App.java [OK]
     │   ├── application/
     │   │   └── viewmodel/
     │   │       ├── ExportFormat.java [OK]
-    │   │       ├── TVM_Doc.yaml [OK]
     │   │       ├── TasksViewModel.java [OK]
     │   │       ├── commands/
     │   │       │   ├── AddTaskCommand.java [OK]
@@ -138,11 +118,11 @@ Task_Management_Appliction/
             ├── application/
             │   └── viewmodel/
             │       ├── commands/
-            │       │   └── CommandStackTest.java [EMPTY]
+            │       │   └── CommandStackTest.java [OK]
             │       ├── events/
-            │       │   └── ObserverPropertyTest.java [EMPTY]
+            │       │   └── ObserverPropertyTest.java [OK]
             │       └── sort/
-            │           └── StrategyTest.java [EMPTY]
+            │           └── StrategyTest.java [OK]
             ├── domain/
             │   ├── FiltersTest.java [OK]
             │   ├── StateTransitionTest.java [OK]

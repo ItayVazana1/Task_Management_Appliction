@@ -20,6 +20,7 @@ import taskmanagement.application.viewmodel.ExportFormat;
 import javax.swing.*;
 import java.awt.*;
 import java.nio.file.Path;
+import java.nio.file.Files; // ✨ added: used to verify export actually wrote a file
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -625,7 +626,21 @@ public final class ToolBox extends RoundedPanel {
 
             try {
                 List<Integer> ids = toIdList(safeIds());
+                // ✨ change: don't blindly claim success — verify result by checking file existence
                 api.exportTasks(path, fmt, onlyFiltered, ids);
+                boolean exists = false;
+                try {
+                    exists = Files.exists(path);
+                } catch (Exception ignore) {
+                    // If Files.exists fails for some reason, we'll fall back to generic failure message
+                }
+                if (!exists) {
+                    JOptionPane.showMessageDialog(this,
+                            "Export failed: file was not created.\n" + path,
+                            "Export", JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+
                 JOptionPane.showMessageDialog(this,
                         "Export completed:\n" + path,
                         "Export", JOptionPane.INFORMATION_MESSAGE);
@@ -652,7 +667,20 @@ public final class ToolBox extends RoundedPanel {
         );
         if (rc != JOptionPane.OK_OPTION) return;
 
-        for (int id : ids) api.advanceState(id);
+        // ✨ change: per-task error handling so failures aren't silent
+        int failures = 0;
+        for (int id : ids) {
+            try {
+                api.advanceState(id);
+            } catch (RuntimeException ex) {
+                failures++;
+            }
+        }
+        if (failures > 0) {
+            JOptionPane.showMessageDialog(this,
+                    "Some tasks failed to advance (" + failures + "). Check logs/DB.",
+                    "Advance", JOptionPane.WARNING_MESSAGE);
+        }
     }
 
     private void onMarkAsDialog() {
