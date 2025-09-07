@@ -216,8 +216,8 @@ public final class EmbeddedDerbyTasksDAO implements ITasksDAO {
      *
      * @param rs the current result set row
      * @return mapped {@link Task}
-     * @throws SQLException           on JDBC error
-     * @throws ValidationException    if domain validation fails
+     * @throws SQLException        on JDBC error
+     * @throws ValidationException if domain validation fails
      */
     private Task mapRow(ResultSet rs) throws SQLException, ValidationException {
         final int id = rs.getInt("id");
@@ -230,12 +230,13 @@ public final class EmbeddedDerbyTasksDAO implements ITasksDAO {
 
     /**
      * Allocates the next available id from the TASKS table.
+     * <p>Starts from {@code 1} when the table is empty (IDs are always positive).</p>
      *
-     * @return the next id (always &gt;= 0)
+     * @return the next id (always {@code >= 1})
      * @throws SQLException on SQL error
      */
     private int nextId() throws SQLException {
-        final String sql = "SELECT COALESCE(MAX(id), -1) + 1 FROM TASKS";
+        final String sql = "SELECT COALESCE(MAX(id), 0) + 1 FROM TASKS"; // start from 1
         try (Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery(sql)) {
             rs.next();

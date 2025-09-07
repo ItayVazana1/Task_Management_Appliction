@@ -1,11 +1,13 @@
 package taskmanagement.domain.exceptions;
 
 /**
- * Thrown when a domain object (e.g., Task) violates validation rules.
+ * ValidationException
+ * Unchecked domain exception for invalid input or illegal state transitions.
  */
-public class ValidationException extends Exception {
+public class ValidationException extends RuntimeException {
+
     /**
-     * Creates a new ValidationException with a message.
+     * Creates a new ValidationException with the specified detail message.
      * @param message detail message
      */
     public ValidationException(String message) {
@@ -13,9 +15,9 @@ public class ValidationException extends Exception {
     }
 
     /**
-     * Creates a new ValidationException with a message and root cause.
+     * Creates a new ValidationException with the specified detail message and cause.
      * @param message detail message
-     * @param cause   root cause
+     * @param cause   the cause (may be null)
      */
     public ValidationException(String message, Throwable cause) {
         super(message, cause);

@@ -15,7 +15,7 @@ import java.util.Objects;
  * <p>Notes:
  * <ul>
  *   <li>Constructors call setters to reuse validation.</li>
- *   <li>{@code setState} validates non-null only (keeps backward compatibility).</li>
+ *   <li>{@code setState} validates non-null and enforces forward-only transitions.</li>
  *   <li>State-pattern helpers {@link #transitionTo(TaskState)} and {@link #advanceState()} enforce legal transitions.</li>
  * </ul>
  */
@@ -33,7 +33,8 @@ public class Task implements ITask {
      * @param title       non-empty title
      * @param description nullable description
      * @param state       non-null state
-     * @throws IllegalArgumentException if title is blank or state is null
+     * @throws IllegalArgumentException if title is blank
+     * @throws ValidationException      if state is null or transition is illegal
      */
     public Task(int id, String title, String description, TaskState state) {
         setId(id);
@@ -49,27 +50,19 @@ public class Task implements ITask {
     }
 
     // ------------------------------------------------------------
-    // ITask (public API expected by the rest of the application)
+    // ITask
     // ------------------------------------------------------------
 
-    @Override
-    public int getId() {
-        return id;
-    }
+    @Override public int getId() { return id; }
 
     /**
      * Sets the identifier.
      * <p>Note: negative ids are allowed only if your DAO uses them as placeholders.
      * If not, keep ids >= 0.
      */
-    public void setId(int id) {
-        this.id = id;
-    }
+    public void setId(int id) { this.id = id; }
 
-    @Override
-    public String getTitle() {
-        return title;
-    }
+    @Override public String getTitle() { return title; }
 
     /** Sets a non-blank title. */
     public void setTitle(String title) {
@@ -79,36 +72,42 @@ public class Task implements ITask {
         this.title = title.trim();
     }
 
-    @Override
-    public String getDescription() {
-        return description;
-    }
+    @Override public String getDescription() { return description; }
 
     /** Sets description (nullable). Trims when non-null. */
     public void setDescription(String description) {
         this.description = (description == null) ? null : description.trim();
     }
 
-    @Override
-    public TaskState getState() {
-        return state;
-    }
+    @Override public TaskState getState() { return state; }
 
     /**
-     * Sets state (non-null). Does not enforce transition rules to preserve
-     * backward compatibility with existing DAO/VM flows that directly set a state.
-     */
-    public void setState(TaskState state) {
-        if (state == null) {
-            throw new IllegalArgumentException("state must not be null");
-        }
-        this.state = state;
-    }
-
-    /**
-     * State-pattern helper: transition to {@code target} only if allowed by current state's rules.
+     * Sets state (non-null) and enforces forward-only transitions.
+     * Allowed: ToDo → InProgress → Completed (self-sets are idempotent).
      *
-     * @param target desired target state
+     * <p><b>No signature change:</b> throws an unchecked {@link ValidationException}
+     * to avoid ripple effects across callers.</p>
+     *
+     * @param newState the new state (must not be null)
+     * @throws ValidationException if newState is null or the transition is illegal
+     */
+    public void setState(TaskState newState) {
+        if (newState == null) {
+            throw new ValidationException("state must not be null");
+        }
+        if (this.state == newState) {
+            return; // idempotent
+        }
+        if (this.state != null && !this.state.canTransitionTo(newState)) {
+            throw new ValidationException("Illegal state transition: " + this.state + " -> " + newState);
+        }
+        this.state = newState;
+    }
+
+    /**
+     * Transition helper using State pattern rules.
+     *
+     * @param target desired target state (must not be null)
      * @throws ValidationException if transition is not allowed
      * @throws NullPointerException if target is null
      */
@@ -122,17 +121,16 @@ public class Task implements ITask {
     }
 
     /**
-     * State-pattern helper: advance to the next state according to the
-     * current state's behavior.
+     * Advance to the next state per current state's behavior.
      *
-     * @throws ValidationException if advancing is not allowed (shouldn't happen with current rules)
+     * @throws ValidationException if advancing is not allowed
      */
     public void advanceState() throws ValidationException {
         transitionTo(Objects.requireNonNull(this.state, "current state is null").next());
     }
 
     // ------------------------------------------------------------
-    // Visitor integration: create a record per state and dispatch
+    // Visitor
     // ------------------------------------------------------------
 
     @Override
@@ -140,9 +138,9 @@ public class Task implements ITask {
         Objects.requireNonNull(visitor, "visitor must not be null");
         final TaskState s = Objects.requireNonNull(this.state, "state must not be null");
         switch (s) {
-            case ToDo -> visitor.visit(new ToDoTaskRec(id, title, description));
+            case ToDo       -> visitor.visit(new ToDoTaskRec(id, title, description));
             case InProgress -> visitor.visit(new InProgressTaskRec(id, title, description));
-            case Completed -> visitor.visit(new CompletedTaskRec(id, title, description));
+            case Completed  -> visitor.visit(new CompletedTaskRec(id, title, description));
         }
     }
 
@@ -154,15 +152,10 @@ public class Task implements ITask {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (!(o instanceof Task other)) return false;
-        // Identity by id (stable under DAO assignment). If ids are not assigned yet,
-        // equals falls back to reference equality above.
         return id == other.id;
     }
 
-    @Override
-    public int hashCode() {
-        return Integer.hashCode(id);
-    }
+    @Override public int hashCode() { return Integer.hashCode(id); }
 
     @Override
     public String toString() {

@@ -2,9 +2,7 @@ package taskmanagement.domain;
 
 /**
  * Task lifecycle states implemented as a behavioral enum (State pattern).
- * <p>
- * Keeping an enum preserves binary/source compatibility across the app,
- * while each constant provides its own transition rules and "next" step.
+ * Each constant provides its own transition rules and "next" step.
  */
 public enum TaskState {
 
@@ -29,12 +27,12 @@ public enum TaskState {
      * Active work state. Allowed transitions:
      * - InProgress -> Completed
      * - InProgress -> InProgress (idempotent)
-     * - InProgress -> ToDo (rollback allowed)
+     * (Rollback to ToDo is NOT allowed)
      */
     InProgress {
         @Override
         public boolean canTransitionTo(TaskState target) {
-            return target == InProgress || target == Completed || target == ToDo;
+            return target == InProgress || target == Completed; // no rollback
         }
 
         @Override
@@ -46,7 +44,7 @@ public enum TaskState {
     /**
      * Terminal state. Allowed transitions:
      * - Completed -> Completed (idempotent)
-     * Other transitions are disallowed by default.
+     * Other transitions are disallowed.
      */
     Completed {
         @Override
@@ -62,7 +60,6 @@ public enum TaskState {
 
     /**
      * Whether a transition from this state to {@code target} is allowed.
-     * Implemented per constant (polymorphic behavior).
      */
     public abstract boolean canTransitionTo(TaskState target);
 
