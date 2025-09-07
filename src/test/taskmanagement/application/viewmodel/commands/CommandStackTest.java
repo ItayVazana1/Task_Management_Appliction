@@ -4,7 +4,6 @@ import org.junit.Before;
 import org.junit.Test;
 import taskmanagement.domain.ITask;
 import taskmanagement.domain.TaskState;
-import taskmanagement.domain.exceptions.ValidationException;
 import taskmanagement.persistence.ITasksDAO;
 import taskmanagement.persistence.TasksDAOException;
 
@@ -14,24 +13,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.Assert.*;
 
 /**
- * CommandStackTest
- * ----------------
- * Unit tests for the Command pattern stack (execute/undo/redo) with the concrete
- * commands: AddTaskCommand, UpdateTaskCommand, DeleteTaskCommand, MarkStateCommand.
- *
- * Notes:
- *  • Uses an in-memory FakeDAO (no Derby) to keep tests fast and deterministic.
- *  • Uses a local MutableTask test-double that implements ITask (with setters).
- *  • Verifies idempotent redo behavior and state restoration on undo.
+ * JUnit 4 tests for the command stack (execute/undo/redo) used in the
+ * tasks management application. Verifies behavior of {@code AddTaskCommand},
+ * {@code UpdateTaskCommand}, {@code DeleteTaskCommand}, and {@code MarkStateCommand}
+ * against an in-memory fake DAO using a minimal mutable task double.
  */
 public final class CommandStackTest {
 
-    // -------- Test doubles --------
-
-    /**
-     * Minimal mutable task used for tests only.
-     * Provides setters so FakeDAO/commands can reflect assigned ids and changes.
-     */
     private static final class MutableTask implements ITask {
         private int id;
         private String title;
@@ -45,7 +33,6 @@ public final class CommandStackTest {
             this.state = Objects.requireNonNull(state, "state");
         }
 
-        /** Copy constructor */
         MutableTask(MutableTask other) {
             this(other.id, other.title, other.description, other.state);
         }
@@ -62,16 +49,10 @@ public final class CommandStackTest {
 
         @Override
         public void accept(taskmanagement.domain.visitor.TaskVisitor visitor) {
-            // Not used in these tests
+            // Intentionally unused in these tests.
         }
     }
 
-    /**
-     * In-memory DAO fake:
-     *  • addTask: assigns id if <= 0, otherwise preserves given id (so redo after undo keeps same id).
-     *  • updateTask: replaces by id.
-     *  • deleteTask: removes by id.
-     */
     private static final class FakeDAO implements ITasksDAO {
         private final Map<Integer, ITask> store = new LinkedHashMap<>();
         private final AtomicInteger seq = new AtomicInteger(1);
@@ -94,9 +75,8 @@ public final class CommandStackTest {
             int id = mt.getId();
             if (id <= 0) {
                 id = seq.getAndIncrement();
-                mt.setId(id); // reflect effective id into the task instance
+                mt.setId(id);
             } else {
-                // if id already exists, treat as conflict
                 if (store.containsKey(id)) {
                     throw new TasksDAOException("Duplicate id: " + id);
                 }
@@ -126,7 +106,6 @@ public final class CommandStackTest {
             return new MutableTask(mt.getId(), mt.getTitle(), mt.getDescription(), mt.getState());
         }
 
-        // Helpers for assertions
         boolean exists(int id) { return store.containsKey(id); }
         Optional<MutableTask> find(int id) {
             ITask t = store.get(id);
@@ -135,60 +114,59 @@ public final class CommandStackTest {
         int size() { return store.size(); }
     }
 
-    // -------- Fixtures --------
-
     private FakeDAO dao;
     private CommandStack stack;
 
+    /**
+     * Initializes the in-memory DAO and command stack before each test.
+     */
     @Before
     public void setUp() {
         dao = new FakeDAO();
         stack = new CommandStack();
     }
 
-    // -------- Tests --------
-
     /**
-     * Verifies AddTaskCommand: execute adds a row and reflects id; undo deletes; redo adds back (same id).
+     * Ensures {@link AddTaskCommand} adds a row and reflects an assigned id,
+     * then validates that undo deletes the row and redo reinserts it with the same id.
+     *
+     * @throws Exception if the command execution fails unexpectedly
      */
     @Test
     public void add_execute_undo_redo() throws Exception {
         MutableTask t = new MutableTask(0, "A", "desc", TaskState.ToDo);
         AddTaskCommand add = new AddTaskCommand(dao, t);
 
-        // execute
         stack.execute(add);
         assertTrue("id should be assigned (>0)", t.getId() > 0);
         int assigned = t.getId();
         assertEquals(1, dao.size());
         assertTrue(dao.exists(assigned));
 
-        // undo
         stack.undo();
         assertEquals(0, dao.size());
         assertFalse(dao.exists(assigned));
 
-        // redo
         stack.redo();
         assertEquals(1, dao.size());
         assertTrue("redo should reinsert same id", dao.exists(assigned));
     }
 
     /**
-     * Verifies UpdateTaskCommand: execute applies 'after'; undo restores 'before'; redo applies 'after' again.
+     * Ensures {@link UpdateTaskCommand} applies the updated snapshot on execute,
+     * restores the original snapshot on undo, and reapplies the update on redo.
+     *
+     * @throws Exception if the command execution fails unexpectedly
      */
     @Test
     public void update_execute_undo_redo() throws Exception {
-        // seed initial row
         MutableTask before = new MutableTask(0, "Title-1", "D", TaskState.ToDo);
         new AddTaskCommand(dao, before).execute();
         int id = before.getId();
 
-        // after snapshot
         MutableTask after = new MutableTask(id, "Title-2", "D", TaskState.ToDo);
         UpdateTaskCommand upd = new UpdateTaskCommand(dao, copy(before), copy(after));
 
-        // through stack
         stack.execute(upd);
         assertEquals("Title-2", dao.getTask(id).getTitle());
 
@@ -200,11 +178,13 @@ public final class CommandStackTest {
     }
 
     /**
-     * Verifies DeleteTaskCommand: execute removes; undo re-adds same snapshot (same id); redo removes again.
+     * Ensures {@link DeleteTaskCommand} removes a row on execute, restores it
+     * with the same id on undo, and removes it again on redo.
+     *
+     * @throws Exception if the command execution fails unexpectedly
      */
     @Test
     public void delete_execute_undo_redo() throws Exception {
-        // seed
         MutableTask toDelete = new MutableTask(0, "X", "D", TaskState.ToDo);
         new AddTaskCommand(dao, toDelete).execute();
         int id = toDelete.getId();
@@ -223,17 +203,18 @@ public final class CommandStackTest {
     }
 
     /**
-     * Verifies MarkStateCommand: execute changes state; undo restores; redo changes again.
+     * Ensures {@link MarkStateCommand} changes state on execute, restores the
+     * previous state on undo, and reapplies the new state on redo.
+     *
+     * @throws Exception if the command execution fails unexpectedly
      */
     @Test
     public void mark_state_execute_undo_redo() throws Exception {
-        // seed
         MutableTask t = new MutableTask(0, "S", "D", TaskState.ToDo);
         new AddTaskCommand(dao, t).execute();
         int id = t.getId();
         assertEquals(TaskState.ToDo, dao.getTask(id).getState());
 
-        // factory that clones with new state
         MarkStateCommand.TaskFactory factory = (src, newState) -> {
             MutableTask srcMt = (MutableTask) src;
             MutableTask copy = new MutableTask(srcMt);
@@ -252,8 +233,6 @@ public final class CommandStackTest {
         stack.redo();
         assertEquals(TaskState.InProgress, dao.getTask(id).getState());
     }
-
-    // -------- Helpers --------
 
     private static MutableTask copy(MutableTask mt) {
         return new MutableTask(mt.getId(), mt.getTitle(), mt.getDescription(), mt.getState());

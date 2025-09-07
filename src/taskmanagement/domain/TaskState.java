@@ -2,21 +2,29 @@ package taskmanagement.domain;
 
 /**
  * Task lifecycle states implemented as a behavioral enum (State pattern).
- * Each constant provides its own transition rules and "next" step.
+ * <p>
+ * Each constant defines its own transition rules and "next" step.
+ * Allowed transitions:
+ * <ul>
+ *   <li>ToDo → InProgress or ToDo (idempotent)</li>
+ *   <li>InProgress → Completed or InProgress (idempotent)</li>
+ *   <li>Completed → Completed (idempotent only)</li>
+ * </ul>
+ * </p>
  */
 public enum TaskState {
 
     /**
-     * Initial state. Allowed transitions:
-     * - ToDo -> InProgress
-     * - ToDo -> ToDo (idempotent)
+     * Initial state for newly created tasks.
      */
     ToDo {
+        /** {@inheritDoc} */
         @Override
         public boolean canTransitionTo(TaskState target) {
             return target == ToDo || target == InProgress;
         }
 
+        /** {@inheritDoc} */
         @Override
         public TaskState next() {
             return InProgress;
@@ -24,17 +32,17 @@ public enum TaskState {
     },
 
     /**
-     * Active work state. Allowed transitions:
-     * - InProgress -> Completed
-     * - InProgress -> InProgress (idempotent)
-     * (Rollback to ToDo is NOT allowed)
+     * Active work state.
+     * Rollback to {@link #ToDo} is not allowed.
      */
     InProgress {
+        /** {@inheritDoc} */
         @Override
         public boolean canTransitionTo(TaskState target) {
-            return target == InProgress || target == Completed; // no rollback
+            return target == InProgress || target == Completed;
         }
 
+        /** {@inheritDoc} */
         @Override
         public TaskState next() {
             return Completed;
@@ -42,16 +50,16 @@ public enum TaskState {
     },
 
     /**
-     * Terminal state. Allowed transitions:
-     * - Completed -> Completed (idempotent)
-     * Other transitions are disallowed.
+     * Terminal state for finished tasks.
      */
     Completed {
+        /** {@inheritDoc} */
         @Override
         public boolean canTransitionTo(TaskState target) {
             return target == Completed;
         }
 
+        /** {@inheritDoc} */
         @Override
         public TaskState next() {
             return Completed;
@@ -59,13 +67,20 @@ public enum TaskState {
     };
 
     /**
-     * Whether a transition from this state to {@code target} is allowed.
+     * Checks if a transition from this state to the given target state is allowed.
+     *
+     * @param target the target state
+     * @return {@code true} if the transition is allowed, otherwise {@code false}
      */
     public abstract boolean canTransitionTo(TaskState target);
 
     /**
-     * The "next" state in a forward-only scenario.
+     * Returns the "next" state in the lifecycle.
+     * <p>
      * For terminal states, returns itself.
+     * </p>
+     *
+     * @return the next state
      */
     public abstract TaskState next();
 }

@@ -8,12 +8,9 @@ import java.awt.*;
 import java.util.function.Consumer;
 
 /**
- * HeaderBar
- * Left:  app icon + title label (~60%)
- * Right: pill buttons (About / Close) (~40%)
- *
- * Uses AppTheme tokens for colors/sizing and UiUtils.styleHeaderPillButton(...)
- * for the rounded header buttons.
+ * Header bar component with a left-aligned application icon and title, and right-aligned
+ * pill buttons (About / Close). Colors, spacing, and typography are sourced from
+ * {@link AppTheme}, and rounded buttons are styled via {@link UiUtils#styleHeaderPillButton(JButton, Color, Color)}.
  */
 public class HeaderBar extends JPanel {
 
@@ -24,6 +21,9 @@ public class HeaderBar extends JPanel {
     private Consumer<JButton> aboutHandler;
     private Consumer<JButton> closeHandler;
 
+    /**
+     * Constructs a header bar with icon/title on the left and About/Close buttons on the right.
+     */
     public HeaderBar() {
         setOpaque(true);
         setBackground(AppTheme.HEADER_BG);
@@ -34,7 +34,6 @@ public class HeaderBar extends JPanel {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(AppTheme.HEADER_HPAD, AppTheme.HEADER_HPAD, AppTheme.HEADER_HPAD, AppTheme.HEADER_HPAD);
 
-        // ---- Left (icon + title ~60%) ----
         JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         leftPanel.setOpaque(false);
 
@@ -48,14 +47,12 @@ public class HeaderBar extends JPanel {
         titleLabel.setForeground(AppTheme.MAIN_APP_TITLE);
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, AppTheme.TITLE_FONT));
         titleLabel.setHorizontalAlignment(SwingConstants.LEFT);
-
         leftPanel.add(titleLabel);
 
         gbc.gridx = 0;
         gbc.weightx = 0.60;
         add(leftPanel, gbc);
 
-        // ---- Right (actions ~40%) ----
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, AppTheme.ACTIONS_HGAP, AppTheme.ACTIONS_VGAP));
         actions.setOpaque(false);
 
@@ -82,16 +79,20 @@ public class HeaderBar extends JPanel {
         add(actions, gbc);
     }
 
-    // ---------------------------------------------------------------------
-    // Public API
-    // ---------------------------------------------------------------------
-
-    /** Change the title text on the left side. */
+    /**
+     * Sets the title text displayed on the left side of the header.
+     *
+     * @param text the new title text; {@code null} is treated as an empty string
+     */
     public void setTitleText(String text) {
         titleLabel.setText(text != null ? text : "");
     }
 
-    /** Register a click handler for the About button. */
+    /**
+     * Registers a click handler for the About button, replacing any existing listeners.
+     *
+     * @param handler a consumer that receives the About {@link JButton}; ignored if {@code null}
+     */
     public void onAbout(Consumer<JButton> handler) {
         if (handler == null) return;
         for (var l : aboutButton.getActionListeners()) {
@@ -101,7 +102,11 @@ public class HeaderBar extends JPanel {
         this.aboutHandler = handler;
     }
 
-    /** Register a click handler for the Close button. */
+    /**
+     * Registers a click handler for the Close button, replacing any existing listeners.
+     *
+     * @param handler a consumer that receives the Close {@link JButton}; ignored if {@code null}
+     */
     public void onClose(Consumer<JButton> handler) {
         if (handler == null) return;
         for (var l : closeButton.getActionListeners()) {

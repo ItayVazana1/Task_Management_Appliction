@@ -4,20 +4,38 @@ import javax.swing.*;
 import java.awt.*;
 
 /**
- * A simple JPanel with rounded corners and a custom background color.
- * Opaque painting is handled manually to support transparency around corners.
+ * A custom {@link JPanel} with rounded corners and a configurable background color.
+ * <p>
+ * This panel disables default opacity so that its rounded edges
+ * can blend seamlessly with the parent background.
+ * </p>
  */
 public class RoundedPanel extends JPanel {
+
+    /** Radius (in pixels) used for drawing rounded corners. */
     private final int arc;
+
+    /** Background color used to fill the rounded panel. */
     private final Color bg;
 
+    /**
+     * Creates a new rounded panel with the specified background color and corner radius.
+     *
+     * @param bg  the background color of the panel
+     * @param arc the radius (in pixels) for the rounded corners
+     */
     public RoundedPanel(Color bg, int arc) {
         super();
         this.bg = bg;
         this.arc = arc;
-        setOpaque(false); // let us paint rounded shape without filling full rect
+        setOpaque(false); // ensure background outside rounded area is transparent
     }
 
+    /**
+     * Paints the panel with rounded corners using the configured background color.
+     *
+     * @param g the {@link Graphics} context used for painting
+     */
     @Override
     protected void paintComponent(Graphics g) {
         Graphics2D g2 = (Graphics2D) g.create();

@@ -1,18 +1,34 @@
 package taskmanagement.persistence.derby;
 
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 
 /**
- * DerbyBootstrap
- * --------------
- * Loads Derby embedded driver, boots/creates the DB, and ensures schema.
+ * Utility class responsible for booting the embedded Derby database,
+ * creating it if necessary, and ensuring that the required schema exists.
+ * <p>
+ * This class is final and cannot be instantiated.
  */
 public final class DerbyBootstrap {
 
-    private DerbyBootstrap() { }
+    /**
+     * Private constructor to prevent instantiation.
+     */
+    private DerbyBootstrap() {
+    }
 
     /**
-     * Boot Derby, create DB & schema if needed, and return an open Connection.
+     * Boots the embedded Derby database, creates it if it does not already exist,
+     * ensures that the required schema is present, and returns an open
+     * {@link Connection}.
+     *
+     * @return an open {@link Connection} to the embedded Derby database
+     * @throws IllegalStateException if the Derby driver cannot be loaded
+     *                               or the database cannot be booted
      */
     public static Connection bootAndEnsureSchema() {
         try {
@@ -21,19 +37,15 @@ public final class DerbyBootstrap {
             throw new IllegalStateException("Derby driver not found: " + DerbyConfig.DRIVER_CLASS, e);
         }
 
-        try {
-            // Create DB if needed
-            try (Connection ignored = DriverManager.getConnection(DerbyConfig.urlCreate())) {
-                // just creating; the connection will be closed by try-with-resources
-            }
+        try (Connection ignored = DriverManager.getConnection(DerbyConfig.urlCreate())) {
+            // Attempt to create the database if it does not exist
         } catch (SQLException createEx) {
-            // If DB already exists, Derby may still succeed without throwing; if it throws for some reason,
-            // we will continue to boot normally.
+            // Ignore exceptions if database already exists
         }
 
         try {
             Connection conn = DriverManager.getConnection(DerbyConfig.urlBoot());
-            ensureSchema(conn);
+            ensureSchema(conn); // Ensure required tables are present
             return conn;
         } catch (SQLException bootEx) {
             throw new IllegalStateException("Failed to boot Derby DB", bootEx);
@@ -41,7 +53,11 @@ public final class DerbyBootstrap {
     }
 
     /**
-     * Ensure required tables exist. Creates them if missing.
+     * Ensures the required tables exist in the database.
+     * Creates missing tables if they are not present.
+     *
+     * @param conn an open {@link Connection} to the database
+     * @throws SQLException if a database access error occurs
      */
     private static void ensureSchema(Connection conn) throws SQLException {
         if (!tableExists(conn, DerbyConfig.TABLE_TASKS)) {
@@ -58,6 +74,14 @@ public final class DerbyBootstrap {
         }
     }
 
+    /**
+     * Checks whether a table with the specified name exists in the database.
+     *
+     * @param conn  an open {@link Connection} to the database
+     * @param table the table name to check
+     * @return {@code true} if the table exists, {@code false} otherwise
+     * @throws SQLException if a database access error occurs
+     */
     private static boolean tableExists(Connection conn, String table) throws SQLException {
         DatabaseMetaData meta = conn.getMetaData();
         try (ResultSet rs = meta.getTables(null, null, table.toUpperCase(), null)) {
@@ -66,16 +90,24 @@ public final class DerbyBootstrap {
     }
 
     /**
-     * Attempt to shutdown Derby and close the given connection quietly.
+     * Attempts to shut down the embedded Derby database and closes
+     * the given {@link Connection}. Any shutdown-related exceptions
+     * are ignored as Derby throws an exception when shutdown succeeds.
+     *
+     * @param conn an open {@link Connection} to close, may be {@code null}
      */
     public static void shutdownQuietly(Connection conn) {
         if (conn != null) {
-            try { conn.close(); } catch (SQLException ignored) {}
+            try {
+                conn.close();
+            } catch (SQLException ignored) {
+                // ignore close failures
+            }
         }
         try {
             DriverManager.getConnection(DerbyConfig.urlShutdown());
         } catch (SQLException ignored) {
-            // Derby throws an exception on successful shutdown in embedded mode – ignore by design.
+            // Derby throws an exception on successful shutdown
         }
     }
 }

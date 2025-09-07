@@ -6,43 +6,39 @@ import taskmanagement.ui.styles.AppTheme;
 import javax.swing.SwingUtilities;
 
 /**
- * Application entry point (UI mode).
+ * Application entry point for launching the Tasks Management Application UI.
  * <p>
- * Responsibilities:
- * <ul>
- *   <li>Ensure Swing is launched on the EDT.</li>
- *   <li>Apply global UI defaults (accent and selection colors).</li>
- *   <li>Create and show the {@link MainFrame}.</li>
- * </ul>
- * </p>
- * <p>
- * MVVM note: The ViewModel/DAO wiring is intentionally deferred to the UI layer
- * (see {@code MainFrame}) per the current connection approach for this chat.
- * This class performs no model/persistence work and keeps startup minimal.
+ * This class ensures the Swing user interface is started on the Event Dispatch Thread (EDT),
+ * applies global theme defaults, and displays the main application window.
  * </p>
  */
 public final class App {
 
-    /** Utility class: no instances. */
+    /**
+     * Private constructor to prevent instantiation.
+     * This is a utility class and should not be instantiated.
+     */
     private App() { }
 
     /**
-     * Program entry point. Schedules UI initialization on the EDT,
-     * applies global theme defaults, sets a default uncaught exception handler,
-     * and shows the main application window.
+     * Main program entry point.
+     * <p>
+     * Responsibilities:
+     * <ul>
+     *   <li>Schedules UI initialization on the Event Dispatch Thread (EDT).</li>
+     *   <li>Applies global Swing theme defaults.</li>
+     *   <li>Sets a default uncaught exception handler.</li>
+     *   <li>Creates and shows the {@link MainFrame}.</li>
+     * </ul>
+     * </p>
      *
-     * @param args command-line arguments (unused)
+     * @param args command-line arguments (not used)
      */
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
-            // Apply global Swing defaults (e.g., remove blue accent, dark selections).
             AppTheme.applyAccentDefaults();
-
-            // Log unexpected exceptions instead of silent failures.
             Thread.setDefaultUncaughtExceptionHandler((t, e) -> e.printStackTrace(System.err));
-
-            // Create and show the main window.
-            MainFrame frame = new MainFrame(); // preserve existing public API (no-arg constructor)
+            MainFrame frame = new MainFrame();
             frame.setVisible(true);
         });
     }

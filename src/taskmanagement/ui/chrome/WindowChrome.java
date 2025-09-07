@@ -11,43 +11,36 @@ import java.awt.event.MouseEvent;
 import java.awt.geom.RoundRectangle2D;
 
 /**
- * WindowChrome
- * Utilities for borderless windows with rounded corners and drag handling.
- *
- * Features:
- * - makeBorderlessWithRoundedCorners(JFrame): sets undecorated, transparent background,
- *   and keeps a rounded shape synced to window size using AppTheme.WINDOW_CORNER_ARC.
- * - installDragHandler(JFrame, JComponent): makes the given component act as a drag handle.
- *
- * Notes:
- * - This class is UI-agnostic; it does not impose a Look&Feel.
- * - Comments in English only.
+ * Utility methods for borderless windows with rounded corners and drag handling.
+ * <p>
+ * Provides helpers to make a frame undecorated with rounded corners and to
+ * install a drag handler so a component can move the window.
  */
 public final class WindowChrome {
 
     private WindowChrome() {}
 
     /**
-     * Make the frame borderless and apply rounded corners.
-     * Safe to call once after frame content is set (before showing).
+     * Makes the frame borderless and applies rounded corners.
+     * <p>
+     * Sets the frame to undecorated, applies a transparent background, and
+     * keeps a rounded shape synchronized with size changes using
+     * {@link AppTheme#WINDOW_CORNER_ARC}.
+     *
+     * @param frame the frame to modify; no action if {@code null}
      */
     public static void makeBorderlessWithRoundedCorners(JFrame frame) {
         if (frame == null) return;
 
-        // Undecorated borderless window
         try {
             frame.setUndecorated(true);
         } catch (IllegalComponentStateException ignore) {
             // If already visible/packed as decorated, caller should re-create before showing.
         }
 
-        // Ensure background supports translucency (for smooth corners on some platforms)
         frame.setBackground(new Color(0, 0, 0, 0));
-
-        // Apply initial shape
         applyRoundedShape(frame);
 
-        // Keep shape in sync with window size changes
         frame.addComponentListener(new ComponentAdapter() {
             @Override public void componentResized(ComponentEvent e) { applyRoundedShape(frame); }
             @Override public void componentShown(ComponentEvent e)   { applyRoundedShape(frame); }
@@ -55,8 +48,11 @@ public final class WindowChrome {
     }
 
     /**
-     * Install a drag handler so dragging the given handle moves the frame.
-     * This is useful when the window is borderless.
+     * Installs a drag handler so dragging the given component moves the frame.
+     * Intended for use with borderless windows.
+     *
+     * @param frame      the frame to move; no action if {@code null}
+     * @param dragHandle the component acting as a drag handle; no action if {@code null}
      */
     public static void installDragHandler(JFrame frame, JComponent dragHandle) {
         if (frame == null || dragHandle == null) return;
@@ -83,16 +79,13 @@ public final class WindowChrome {
         dragHandle.addMouseMotionListener(ma);
     }
 
-    // ---- internal ----
-
-    /** Apply a rounded rectangle shape using AppTheme.WINDOW_CORNER_ARC. */
+    /** Applies a rounded rectangle shape using {@link AppTheme#WINDOW_CORNER_ARC}. */
     private static void applyRoundedShape(JFrame frame) {
         int arc = AppTheme.WINDOW_CORNER_ARC;
         int w = frame.getWidth();
         int h = frame.getHeight();
         if (w <= 0 || h <= 0) return;
 
-        // For Java 9+, setShape works with transparent backgrounds.
         Shape round = new RoundRectangle2D.Double(0, 0, w, h, arc, arc);
         try {
             frame.setShape(round);

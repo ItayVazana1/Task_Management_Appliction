@@ -13,27 +13,39 @@ import taskmanagement.domain.TaskState;
 import taskmanagement.persistence.derby.EmbeddedDerbyTasksDAO;
 
 /**
- * TaskDaoTest (JUnit 4)
- * ---------------------
- * CRUD tests for EmbeddedDerbyTasksDAO.
+ * JUnit 4 CRUD tests for {@link EmbeddedDerbyTasksDAO}.
+ * <p>Execution order is fixed by method name to make assertions deterministic.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING) // optional: run by method name
 public class TaskDaoTest {
 
     private EmbeddedDerbyTasksDAO dao;
 
+    /**
+     * Initializes the DAO and clears all rows before each test.
+     *
+     * @throws TasksDAOException if clearing the table fails
+     */
     @Before
     public void setUp() throws TasksDAOException {
         dao = EmbeddedDerbyTasksDAO.getInstance();
         dao.deleteTasks();
     }
 
+    /**
+     * Shuts down the embedded Derby DAO after all tests complete.
+     */
     @AfterClass
     public static void afterAll() {
         EmbeddedDerbyTasksDAO.getInstance().shutdown();
     }
 
-    /** 1) addTask + getTasks returns inserted task */
+    /**
+     * Verifies that adding a task assigns an id and that listing returns
+     * the inserted task with expected field values.
+     *
+     * @throws TasksDAOException if DAO operations fail
+     */
     @Test
     public void test01_add_and_list() throws TasksDAOException {
         Task t = new Task(0, "Write tests", "DAO CRUD", TaskState.ToDo);
@@ -47,7 +59,11 @@ public class TaskDaoTest {
         Assert.assertEquals(TaskState.ToDo, all[0].getState());
     }
 
-    /** 2) getTask by id and not-found behavior */
+    /**
+     * Verifies retrieval by id and not-found behavior.
+     *
+     * @throws TasksDAOException if DAO operations fail
+     */
     @Test
     public void test02_get_by_id_and_not_found() throws TasksDAOException {
         Task t = new Task(0, "A", "desc", TaskState.InProgress);
@@ -61,7 +77,11 @@ public class TaskDaoTest {
         Assert.assertThrows(TasksDAOException.class, () -> dao.getTask(999_999));
     }
 
-    /** 3) addTask with explicit id and duplicate key error */
+    /**
+     * Verifies insertion with an explicit id and duplicate key rejection.
+     *
+     * @throws TasksDAOException if DAO operations fail unexpectedly
+     */
     @Test
     public void test03_add_with_explicit_id_and_duplicate() throws TasksDAOException {
         Task t1 = new Task(42, "X", "first", TaskState.ToDo);
@@ -72,7 +92,11 @@ public class TaskDaoTest {
         Assert.assertThrows(TasksDAOException.class, () -> dao.addTask(t2));
     }
 
-    /** 4) updateTask modifies existing and fails when missing */
+    /**
+     * Verifies updating an existing row and failure when updating a missing id.
+     *
+     * @throws TasksDAOException if DAO operations fail
+     */
     @Test
     public void test04_update_existing_and_missing() throws TasksDAOException {
         Task t = new Task(0, "Before", "desc", TaskState.ToDo);
@@ -91,7 +115,11 @@ public class TaskDaoTest {
         Assert.assertThrows(TasksDAOException.class, () -> dao.updateTask(missing));
     }
 
-    /** 5) deleteTask removes row and fails when not found */
+    /**
+     * Verifies single-row deletion and not-found behavior on repeated deletion.
+     *
+     * @throws TasksDAOException if DAO operations fail
+     */
     @Test
     public void test05_delete_single_and_missing() throws TasksDAOException {
         Task t = new Task(0, "To delete", "d", TaskState.ToDo);
@@ -103,7 +131,11 @@ public class TaskDaoTest {
         Assert.assertThrows(TasksDAOException.class, () -> dao.deleteTask(id));
     }
 
-    /** 6) deleteTasks clears table */
+    /**
+     * Verifies bulk deletion clears the table.
+     *
+     * @throws TasksDAOException if DAO operations fail
+     */
     @Test
     public void test06_delete_all() throws TasksDAOException {
         dao.addTask(new Task(0, "A", "1", TaskState.ToDo));

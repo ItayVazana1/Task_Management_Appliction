@@ -7,16 +7,12 @@ import taskmanagement.domain.ITask;
 import java.util.*;
 
 /**
- * RowsPropertyAdapter
- * <p>Bridges a {@code Property&lt;List&lt;RowDTO&gt;&gt;} exposed by the ViewModel to a
- * {@code Property&lt;List&lt;ITask&gt;&gt;} consumable by UI widgets. It guarantees that:
- * <ul>
- *   <li>Each VM update results in a NEW {@code List&lt;ITask&gt;} instance, ensuring that
- *       UI listeners are notified and repaint (including Edit scenarios).</li>
- *   <li>Per-id proxies are cached so selection/focus can be preserved across refreshes.
- *       Existing proxies are updated in-place via {@link UiTaskProxy#updateFrom(RowDTO)}.</li>
- *   <li>Eviction removes proxies for rows that disappeared.</li>
- * </ul>
+ * Adapter that converts a {@code Property<List<RowDTO>>} from the ViewModel
+ * into a {@code Property<List<ITask>>} suitable for UI widgets.
+ * <p>
+ * The adapter emits a new immutable list instance on every ViewModel update to
+ * ensure UI listeners are notified, and maintains per-id proxy objects to
+ * preserve selection and focus across refreshes.
  */
 public final class RowsPropertyAdapter {
 
@@ -27,33 +23,31 @@ public final class RowsPropertyAdapter {
     private final Map<Integer, UiTaskProxy> cache = new HashMap<>();
 
     /**
-     * Creates the adapter and starts listening to VM changes immediately.
-     * @param vmRows the ViewModel property with row snapshots (non-null)
-     * @throws NullPointerException if {@code vmRows} is null
+     * Creates the adapter and starts listening to ViewModel changes.
+     *
+     * @param vmRows the ViewModel property that exposes row snapshots; must not be {@code null}
+     * @throws NullPointerException if {@code vmRows} is {@code null}
      */
     public RowsPropertyAdapter(final Property<List<RowDTO>> vmRows) {
         this.vmRows = Objects.requireNonNull(vmRows, "vmRows");
         this.uiRows = new Property<>(List.of());
-
-        // Initial snapshot.
         rebuild(this.vmRows.getValue());
-
-        // Subscribe to VM changes and rebuild the UI list each time.
         this.vmRows.addListener((oldValue, newValue) -> rebuild(newValue));
     }
 
     /**
-     * Returns the UI-facing property to bind against in views.
-     * Typical usage: {@code api.tasksProperty().addListener(...)}.
-     * @return an observable property of immutable {@code List&lt;ITask&gt;}
+     * Returns the UI-facing property for binding in views.
+     *
+     * @return an observable property of an immutable {@code List<ITask>}
      */
     public Property<List<ITask>> asProperty() {
         return uiRows;
     }
 
     /**
-     * Gets the current adapted UI list (never null).
-     * @return current UI list
+     * Returns the current adapted UI list.
+     *
+     * @return the current UI list; never {@code null}
      */
     public List<ITask> getCurrentUiRows() {
         final List<ITask> v = uiRows.getValue();
@@ -61,10 +55,9 @@ public final class RowsPropertyAdapter {
     }
 
     /**
-     * Rebuilds the UI list from the latest VM rows. Always sets a NEW list instance
-     * on {@link #uiRows} to ensure listeners fire even when the logical size doesn't change
-     * (e.g., Edit updates).
-     * @param rows latest rows from the ViewModel (may be null or empty)
+     * Rebuilds the UI list from the latest ViewModel rows and publishes a new list instance.
+     *
+     * @param rows latest rows from the ViewModel; may be {@code null} or empty
      */
     private void rebuild(final List<RowDTO> rows) {
         if (rows == null || rows.isEmpty()) {
@@ -85,15 +78,12 @@ public final class RowsPropertyAdapter {
                 p = new UiTaskProxy(r);
                 cache.put(id, p);
             } else {
-                p.updateFrom(r); // Critical for EDIT to show immediately
+                p.updateFrom(r); // keep existing proxy so selection/focus survive edits
             }
             fresh.add(p);
         }
 
-        // Evict proxies that are no longer present.
         cache.keySet().removeIf(id -> !present.contains(id));
-
-        // Publish an unmodifiable NEW list instance to trigger UI listeners.
         uiRows.setValue(List.copyOf(fresh));
     }
 }

@@ -16,17 +16,12 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * ControlPanel
- * ------------
- * Left rail with five large square buttons arranged in vertical fifths:
- * Refresh, Add, Edit, Delete, Disk Cleanup.
- *
- * <p>Each button shows an icon above and a text label below. Width is locked
- * so the center content cannot steal space. Icons are loaded safely with a
- * fallback 1x1 transparent icon if missing.</p>
- *
- * <p>Behavior: delegates to {@link TasksViewAPI} once injected via
- * {@link #setApi(TasksViewAPI, TasksPanel)}.</p>
+ * Left-side control rail presenting five large square actions: Refresh, Add, Edit, Delete, and Disk Cleanup.
+ * <p>
+ * Icons are loaded safely with a transparent fallback. Width is fixed to prevent the center content
+ * from shrinking the rail. Behavior delegates to a {@link TasksViewAPI} instance injected via
+ * {@link #setApi(TasksViewAPI, TasksPanel)}.
+ * </p>
  */
 public final class ControlPanel extends RoundedPanel {
 
@@ -42,7 +37,9 @@ public final class ControlPanel extends RoundedPanel {
     private TasksViewAPI api;
     private TasksPanel tasksPanel;
 
-    /** Creates the left control rail with five vertically-stacked buttons. */
+    /**
+     * Constructs the control rail with five vertically stacked buttons.
+     */
     public ControlPanel() {
         super(new Color(0x2C2C2C), 16);
         setOpaque(false);
@@ -102,19 +99,16 @@ public final class ControlPanel extends RoundedPanel {
     }
 
     /**
-     * Injects the API and tasks panel for operations.
+     * Injects the API and the tasks panel used for selection-dependent operations.
      *
-     * @param api        the TasksViewAPI implementation
-     * @param tasksPanel the tasks panel (for selection handling)
+     * @param api        the {@link TasksViewAPI} implementation
+     * @param tasksPanel the tasks panel providing selection information
+     * @throws NullPointerException if any argument is {@code null}
      */
     public void setApi(TasksViewAPI api, TasksPanel tasksPanel) {
         this.api = Objects.requireNonNull(api, "api");
         this.tasksPanel = Objects.requireNonNull(tasksPanel, "tasksPanel");
     }
-
-    // ---------------------------------------------------------------------
-    // Actions
-    // ---------------------------------------------------------------------
 
     private void wireActions() {
         refreshBtn.addActionListener(this::onRefresh);
@@ -179,7 +173,6 @@ public final class ControlPanel extends RoundedPanel {
                     @Override public TaskState getState() { return r.state(); }
                     @Override public void accept(taskmanagement.domain.visitor.TaskVisitor v) {}
                 });
-                // Force refresh to update UI immediately after edit
                 api.reload();
             });
         });
@@ -199,10 +192,6 @@ public final class ControlPanel extends RoundedPanel {
             api.deleteAll();
         }
     }
-
-    // ---------------------------------------------------------------------
-    // Confirmations & Helpers
-    // ---------------------------------------------------------------------
 
     private boolean showConfirmDeleteSelected() {
         int ans = JOptionPane.showConfirmDialog(

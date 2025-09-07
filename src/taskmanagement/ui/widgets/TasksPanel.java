@@ -6,7 +6,6 @@ import taskmanagement.ui.api.TasksViewAPI;
 import taskmanagement.ui.util.RoundedPanel;
 import taskmanagement.ui.dialogs.TaskDetailsDialog;
 
-
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
@@ -18,32 +17,21 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * TasksPanel
- * ----------
- * Sticky header + scrollable list of tasks bound to {@link TasksViewAPI}.
- *
- * <p>Rows are built from either filtered or full list (auto-picked).
- * We subscribe to BOTH properties to avoid missed updates when ViewModel
- * only notifies one side (filtered/all) or reuses list instances.</p>
- *
- * <p>Selection:
- * Each row has a checkbox that toggles the task selection. The current
- * selection is exposed via {@link #selectedIdsProperty()} for observers
- * (e.g., ToolBox counters and actions) and via the compatibility getter
- * {@link #getSelectedIds()} used by existing wiring.</p>
+ * Scrollable list of tasks with a sticky header, bound to a {@link TasksViewAPI}.
+ * <p>
+ * The panel exposes selection via an observable property and a compatibility getter.
+ * It listens to both the full tasks list and the filtered tasks list to avoid missed updates.
+ * </p>
  */
 public final class TasksPanel extends JPanel {
 
-    // ---------- preview clipping ----------
     private static final int TITLE_PREVIEW_MAX = 24;
 
-    // ---------- typography ----------
     private static final float FONT_SIZE_BASE   = 11f;
     private static final float HEADER_FONT_SIZE = 10f;
     private static final float FONT_SIZE_PILL   = 11f;
     private static final float FONT_SIZE_ID     = 11f;
 
-    // ---------- visuals ----------
     private static final Color CARD_BG        = new Color(58, 58, 58);
     private static final Color MINI_BG        = new Color(66, 66, 66);
     private static final int   OUTER_RADIUS   = 10;
@@ -63,7 +51,6 @@ public final class TasksPanel extends JPanel {
 
     private static final Color PIPE_FG   = new Color(140, 140, 140);
 
-    // ---------- layout weights ----------
     private static final double W_CHECK = 0.30;
     private static final double W_ID    = 0.50;
     private static final double W_TITLE = 1.40;
@@ -89,31 +76,30 @@ public final class TasksPanel extends JPanel {
     private static final int MIN_STAT_W  = 100;
     private static final int MIN_BTN_W   = 92;
 
-    // ---------- members ----------
     private final JPanel headerWrapper;
     private final RoundedPanel headerPanel;
     private final JPanel listPanel;
     private final JScrollPane scrollPane;
     private final JPanel headerRightSpacer;
 
-    /** Last computed header 9-column widths. */
     private int[] headerColsPx = null;
 
     private TasksViewAPI api;
 
-    /** Strong refs to listeners (avoid GC & missed updates). */
     private Property.Listener<List<ITask>> tasksListener;
     private Property.Listener<List<ITask>> filteredListener;
 
-    /** Observable property containing the currently selected task IDs (never null). */
+    /** Observable property containing the currently selected task IDs (never {@code null}). */
     private final Property<int[]> selectedIdsProp = new Property<>(new int[0]);
 
+    /**
+     * Creates a new {@code TasksPanel} with a sticky header and scrollable rows.
+     */
     public TasksPanel() {
         super(new BorderLayout());
         setOpaque(false);
         ensureSafeFont(this);
 
-        // Sticky header
         headerPanel = buildHeader();
         headerWrapper = new JPanel(new BorderLayout());
         headerWrapper.setOpaque(false);
@@ -126,14 +112,12 @@ public final class TasksPanel extends JPanel {
         headerWrapper.add(headerRightSpacer, BorderLayout.EAST);
         add(headerWrapper, BorderLayout.NORTH);
 
-        // Rows container
         listPanel = new JPanel();
         listPanel.setLayout(new BoxLayout(listPanel, BoxLayout.Y_AXIS));
         listPanel.setOpaque(false);
         listPanel.setBorder(new EmptyBorder(0, 8, 0, 8));
         ensureSafeFont(listPanel);
 
-        // Scroll
         scrollPane = new JScrollPane(new ScrollableWidthPanel(listPanel),
                 ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
                 ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
@@ -150,21 +134,16 @@ public final class TasksPanel extends JPanel {
         });
     }
 
-    // ---------------------------------------------------------------------
-    // API wiring
-    // ---------------------------------------------------------------------
-
     /**
-     * Injects the {@link TasksViewAPI}, renders a snapshot on the EDT, and subscribes
-     * to both all-tasks and filtered-tasks properties so edits are not missed.
+     * Injects the {@link TasksViewAPI}, renders the current snapshot, and subscribes to
+     * both the all-tasks and filtered-tasks properties.
      *
-     * @param api the API to bind to (must not be null)
-     * @throws NullPointerException if api is null
+     * @param api the API to bind to
+     * @throws NullPointerException if {@code api} is {@code null}
      */
     public void setApi(TasksViewAPI api) {
         Objects.requireNonNull(api, "api");
 
-        // Unbind previous listeners if setApi is called more than once
         if (this.api != null) {
             try {
                 if (tasksListener != null) {
@@ -174,27 +153,24 @@ public final class TasksPanel extends JPanel {
                     this.api.filteredTasksProperty().removeListener(filteredListener);
                 }
             } catch (Exception ignore) {
-                // Safe-guard: ignore if previous API was partially wired
+                // intentionally ignored: previous API may have been partially wired
             }
         }
 
         this.api = api;
 
-        // Paint immediately with current snapshot on EDT (preferring filtered if present)
         if (SwingUtilities.isEventDispatchThread()) {
             renderFromApi();
         } else {
             SwingUtilities.invokeLater(this::renderFromApi);
         }
 
-        // Subscribe to ALL-TASKS
         tasksListener = (oldList, newList) -> {
             if (SwingUtilities.isEventDispatchThread()) renderFromApi();
             else SwingUtilities.invokeLater(this::renderFromApi);
         };
         this.api.tasksProperty().addListener(tasksListener);
 
-        // Subscribe to FILTERED-TASKS (some VMs only notify this on edit)
         filteredListener = (oldList, newList) -> {
             if (SwingUtilities.isEventDispatchThread()) renderFromApi();
             else SwingUtilities.invokeLater(this::renderFromApi);
@@ -203,7 +179,7 @@ public final class TasksPanel extends JPanel {
     }
 
     /**
-     * Forces a repaint from the latest API snapshot (useful after explicit reload()).
+     * Forces a refresh using the latest snapshot from the bound API.
      */
     public void refreshNow() {
         if (SwingUtilities.isEventDispatchThread()) {
@@ -214,14 +190,18 @@ public final class TasksPanel extends JPanel {
     }
 
     /**
-     * @return a live observable property of the currently selected task IDs (never null).
+     * Returns a live observable property of the currently selected task IDs.
+     *
+     * @return the selection property, never {@code null}
      */
     public Property<int[]> selectedIdsProperty() {
         return selectedIdsProp;
     }
 
     /**
-     * @return the currently selected task IDs as a defensive copy.
+     * Returns the currently selected task IDs as a defensive copy.
+     *
+     * @return an array of selected IDs (never {@code null})
      */
     public int[] selectedIds() {
         int[] v = selectedIdsProp.getValue();
@@ -229,8 +209,9 @@ public final class TasksPanel extends JPanel {
     }
 
     /**
-     * Compatibility method used by existing wiring (ContentArea).
-     * @return list of currently selected task IDs.
+     * Returns the selected task IDs as a list (compatibility API).
+     *
+     * @return list of selected IDs, never {@code null}
      */
     public List<Integer> getSelectedIds() {
         List<Integer> ids = new ArrayList<>();
@@ -246,11 +227,6 @@ public final class TasksPanel extends JPanel {
         return ids;
     }
 
-    // ---------------------------------------------------------------------
-    // Rendering
-    // ---------------------------------------------------------------------
-
-    /** Prefer filtered list when non-null, otherwise full list. */
     private void renderFromApi() {
         if (api == null) return;
         List<ITask> filtered = api.filteredTasksProperty().getValue();
@@ -260,7 +236,6 @@ public final class TasksPanel extends JPanel {
     }
 
     private void renderTasks(List<ITask> tasks) {
-        // Keep old selection to restore if possible (by ID)
         int[] oldSel = selectedIds();
 
         listPanel.removeAll();
@@ -277,7 +252,6 @@ public final class TasksPanel extends JPanel {
         listPanel.revalidate();
         listPanel.repaint();
 
-        // Restore selection where possible.
         if (oldSel.length > 0) {
             for (Component c : listPanel.getComponents()) {
                 if (c instanceof RoundedPanel row) {
@@ -289,7 +263,6 @@ public final class TasksPanel extends JPanel {
                 }
             }
         }
-        // Recompute property after redraw.
         fireSelectionChanged();
 
         SwingUtilities.invokeLater(this::recomputeAndApplyFromHeader);
@@ -349,10 +322,6 @@ public final class TasksPanel extends JPanel {
         return p;
     }
 
-    // ---------------------------------------------------------------------
-    // Row construction
-    // ---------------------------------------------------------------------
-
     private RoundedPanel buildRow(ITask task) {
         RoundedPanel row = new RoundedPanel(CARD_BG, OUTER_RADIUS);
         row.setOpaque(false);
@@ -366,7 +335,6 @@ public final class TasksPanel extends JPanel {
         gc.anchor = GridBagConstraints.CENTER;
         gc.fill   = GridBagConstraints.BOTH;
 
-        // Left mini-card: checkbox
         RoundedPanel left = new RoundedPanel(MINI_BG, MINI_RADIUS);
         left.setOpaque(false);
         left.setLayout(new GridBagLayout());
@@ -379,13 +347,11 @@ public final class TasksPanel extends JPanel {
         Dimension cbSize = new Dimension(18, 18);
         chk.setPreferredSize(cbSize);
         chk.setMinimumSize(cbSize);
-        // Update selection property on toggle
         chk.addActionListener(e -> fireSelectionChanged());
         left.add(chk, new GridBagConstraints());
         gc.gridx = 0; gc.weightx = 0;
         row.add(left, gc);
 
-        // Middle mini-card: ID | Title | Status
         RoundedPanel mid = new RoundedPanel(MINI_BG, MINI_RADIUS);
         mid.setOpaque(false);
         mid.setLayout(new GridBagLayout());
@@ -422,7 +388,6 @@ public final class TasksPanel extends JPanel {
         gc.gridx = 1; gc.weightx = 1;
         row.add(mid, gc);
 
-        // Right mini-card: button
         RoundedPanel right = new RoundedPanel(MINI_BG, MINI_RADIUS);
         right.setOpaque(false);
         right.setLayout(new GridBagLayout());
@@ -449,10 +414,6 @@ public final class TasksPanel extends JPanel {
         c.gridx = gridx; c.weightx = weightx;
         panel.add(comp, c);
     }
-
-    // ---------------------------------------------------------------------
-    // Header sync
-    // ---------------------------------------------------------------------
 
     private void recomputeAndApplyFromHeader() {
         JScrollBar vsb = scrollPane.getVerticalScrollBar();
@@ -529,11 +490,9 @@ public final class TasksPanel extends JPanel {
         row.revalidate();
     }
 
-    // ---------------------------------------------------------------------
-    // Selection helpers
-    // ---------------------------------------------------------------------
-
-    /** Recomputes the current selection from the visible rows and updates the property. */
+    /**
+     * Recomputes the current selection from visible rows and updates the selection property.
+     */
     private void fireSelectionChanged() {
         List<Integer> ids = getSelectedIds();
         int[] now = ids.stream().mapToInt(Integer::intValue).toArray();
@@ -547,10 +506,6 @@ public final class TasksPanel extends JPanel {
         for (int v : arr) if (v == id) return true;
         return false;
     }
-
-    // ---------------------------------------------------------------------
-    // General helpers
-    // ---------------------------------------------------------------------
 
     private static String clipForPreview(String s, int n) {
         if (s == null) return "";

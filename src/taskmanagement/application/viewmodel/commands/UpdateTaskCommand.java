@@ -7,13 +7,14 @@ import taskmanagement.persistence.TasksDAOException;
 import java.util.Objects;
 
 /**
- * {@code UpdateTaskCommand}
+ * Command that updates an existing task to a new snapshot.
  * <p>
- * Updates an existing task to the {@code afterSnapshot}.
+ * Implements the Command design pattern:
  * <ul>
- *   <li>Execute: {@code dao.updateTask(afterSnapshot)}</li>
- *   <li>Undo:    {@code dao.updateTask(beforeSnapshot)}</li>
+ *   <li>{@link #execute()} updates the task to the {@code afterSnapshot} state.</li>
+ *   <li>{@link #undo()} restores the task to the {@code beforeSnapshot} state.</li>
  * </ul>
+ * </p>
  */
 public final class UpdateTaskCommand implements Command {
 
@@ -22,11 +23,11 @@ public final class UpdateTaskCommand implements Command {
     private final ITask afterSnapshot;
 
     /**
-     * Creates a new {@code UpdateTaskCommand}.
+     * Constructs a new {@code UpdateTaskCommand}.
      *
-     * @param dao            tasks DAO (must not be {@code null})
-     * @param beforeSnapshot full snapshot of the entity before the update (must not be {@code null})
-     * @param afterSnapshot  full snapshot to persist during execute() (must not be {@code null})
+     * @param dao            the tasks DAO (must not be {@code null})
+     * @param beforeSnapshot snapshot of the entity before update (must not be {@code null})
+     * @param afterSnapshot  snapshot of the entity after update (must not be {@code null})
      * @throws NullPointerException if any argument is {@code null}
      */
     public UpdateTaskCommand(ITasksDAO dao, ITask beforeSnapshot, ITask afterSnapshot) {
@@ -35,22 +36,40 @@ public final class UpdateTaskCommand implements Command {
         this.afterSnapshot = Objects.requireNonNull(afterSnapshot, "afterSnapshot");
     }
 
-    /** {@inheritDoc} */
+    /**
+     * Returns the human-readable name of this command.
+     *
+     * @return the command name
+     */
     @Override
-    public String name() { return "Update Task"; }
+    public String name() {
+        return "Update Task";
+    }
 
-    /** {@inheritDoc} */
+    /**
+     * Executes the update by applying the {@code afterSnapshot}.
+     * <p>
+     * Ensures both snapshots belong to the same task ID before performing the update.
+     * </p>
+     *
+     * @throws TasksDAOException if the IDs mismatch or the DAO update fails
+     */
     @Override
     public void execute() throws TasksDAOException {
-        // Defensive: both snapshots must refer to the same entity id
         if (beforeSnapshot.getId() != afterSnapshot.getId()) {
-            throw new TasksDAOException("Mismatched ids between before/after snapshots: "
-                    + beforeSnapshot.getId() + " vs " + afterSnapshot.getId());
+            throw new TasksDAOException(
+                    "Mismatched ids between before/after snapshots: "
+                            + beforeSnapshot.getId() + " vs " + afterSnapshot.getId()
+            );
         }
         dao.updateTask(afterSnapshot);
     }
 
-    /** {@inheritDoc} */
+    /**
+     * Undoes the update by restoring the {@code beforeSnapshot}.
+     *
+     * @throws TasksDAOException if the DAO update fails
+     */
     @Override
     public void undo() throws TasksDAOException {
         dao.updateTask(beforeSnapshot);

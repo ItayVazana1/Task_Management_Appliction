@@ -6,28 +6,43 @@ import java.util.EnumMap;
 import java.util.Map;
 
 /**
- * Aggregated counts per TaskState for reporting (Visitor result).
- * Provides both generic API (count/inc) and convenience accessors (todo/inProgress/completed)
- * so existing exporters continue to compile.
+ * Report data structure that aggregates the number of tasks per {@link TaskState}.
+ * <p>
+ * Provides both generic access methods ({@link #count(TaskState)}, {@link #inc(TaskState)})
+ * and convenience accessors for individual states ({@link #todo()}, {@link #inProgress()},
+ * {@link #completed()}).
+ * </p>
  */
 public final class ByStateCount implements Report {
+
     private int todo;
     private int inProgress;
     private int completed;
 
-    /** Default constructor (all zero). */
+    /**
+     * Creates a new {@code ByStateCount} with all counters initialized to zero.
+     */
     public ByStateCount() {
-        // all zero by default
     }
 
-    /** Convenience constructor for direct assignment. */
+    /**
+     * Creates a new {@code ByStateCount} with explicit counts.
+     *
+     * @param todo       initial count of tasks in {@link TaskState#ToDo}
+     * @param inProgress initial count of tasks in {@link TaskState#InProgress}
+     * @param completed  initial count of tasks in {@link TaskState#Completed}
+     */
     public ByStateCount(int todo, int inProgress, int completed) {
         this.todo = todo;
         this.inProgress = inProgress;
         this.completed = completed;
     }
 
-    /** Increment the counter for a given state. */
+    /**
+     * Increments the counter corresponding to the given state.
+     *
+     * @param state the task state to increment
+     */
     public void inc(TaskState state) {
         switch (state) {
             case ToDo -> todo++;
@@ -36,7 +51,12 @@ public final class ByStateCount implements Report {
         }
     }
 
-    /** Return the count for the given state. */
+    /**
+     * Returns the count for the given state.
+     *
+     * @param state the task state to query
+     * @return number of tasks recorded in the specified state
+     */
     public int count(TaskState state) {
         return switch (state) {
             case ToDo -> todo;
@@ -45,12 +65,38 @@ public final class ByStateCount implements Report {
         };
     }
 
-    /** Convenience accessors (kept for existing exporters). */
-    public int todo() { return todo; }
-    public int inProgress() { return inProgress; }
-    public int completed() { return completed; }
+    /**
+     * Returns the count of tasks in {@link TaskState#ToDo}.
+     *
+     * @return number of tasks in ToDo state
+     */
+    public int todo() {
+        return todo;
+    }
 
-    /** Optional: immutable view (useful for other exporters). */
+    /**
+     * Returns the count of tasks in {@link TaskState#InProgress}.
+     *
+     * @return number of tasks in InProgress state
+     */
+    public int inProgress() {
+        return inProgress;
+    }
+
+    /**
+     * Returns the count of tasks in {@link TaskState#Completed}.
+     *
+     * @return number of tasks in Completed state
+     */
+    public int completed() {
+        return completed;
+    }
+
+    /**
+     * Returns an immutable map view of all state counts.
+     *
+     * @return a map of {@link TaskState} to their corresponding counts
+     */
     public Map<TaskState, Integer> asMap() {
         EnumMap<TaskState, Integer> m = new EnumMap<>(TaskState.class);
         m.put(TaskState.ToDo, todo);
@@ -59,6 +105,11 @@ public final class ByStateCount implements Report {
         return Map.copyOf(m);
     }
 
+    /**
+     * Returns a string representation of the state counts.
+     *
+     * @return a formatted string showing counts for each state
+     */
     @Override
     public String toString() {
         return "ByStateCount{ToDo=" + todo +

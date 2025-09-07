@@ -13,20 +13,36 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * TaskEditorDialog
- * ----------------
  * Modal dialog for creating or editing a task.
- * View-only (MVVM-safe): collects input and returns it to the caller.
+ * <p>
+ * Presentation-only and MVVM-safe: collects input and returns it to the caller
+ * without accessing the model or DAO.
  */
 public final class TaskEditorDialog extends JDialog {
 
-    /** Mode of the editor (Add or Edit). */
+    /**
+     * Mode of the editor.
+     */
     public enum Mode { ADD, EDIT }
 
-    /** Initial values for edit mode. */
+    /**
+     * Initial values for edit mode.
+     *
+     * @param id          task identifier
+     * @param title       task title
+     * @param description task description
+     * @param state       task state
+     */
     public static record Prefill(int id, String title, String description, TaskState state) { }
 
-    /** Result of user confirmation. */
+    /**
+     * Result returned when the user confirms.
+     *
+     * @param id          task identifier (may be {@code null} in add mode)
+     * @param title       task title
+     * @param description task description
+     * @param state       task state
+     */
     public static record EditorResult(Integer id, String title, String description, TaskState state) { }
 
     private final Mode mode;
@@ -41,9 +57,10 @@ public final class TaskEditorDialog extends JDialog {
 
     /**
      * Constructs the task editor dialog.
+     *
      * @param owner   parent window
-     * @param mode    whether this is ADD or EDIT
-     * @param prefill initial values (only used for EDIT)
+     * @param mode    editor mode (ADD or EDIT)
+     * @param prefill initial values used only for EDIT mode
      */
     private TaskEditorDialog(Window owner, Mode mode, Prefill prefill) {
         super(owner, mode == Mode.ADD ? "Add Task" : "Edit Task", ModalityType.APPLICATION_MODAL);
@@ -56,7 +73,6 @@ public final class TaskEditorDialog extends JDialog {
         pack();
         setLocationRelativeTo(owner);
 
-        // Keyboard shortcuts
         getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
                 .put(KeyStroke.getKeyStroke("ESCAPE"), "cancel");
         getRootPane().getActionMap().put("cancel", new AbstractAction() {
@@ -69,18 +85,12 @@ public final class TaskEditorDialog extends JDialog {
         });
     }
 
-    // ---------------------------------------------------------------------
-    // UI
-    // ---------------------------------------------------------------------
-
     private JComponent buildContent() {
         final RoundedPanel root = new RoundedPanel(AppTheme.PANEL_BG, AppTheme.WINDOW_CORNER_ARC);
         root.setLayout(new BorderLayout(0, 12));
         root.setBorder(new EmptyBorder(16, 18, 16, 18));
 
-        // ===== Header (accent by mode) =====
-        final Color accentBg = (mode == Mode.ADD) ? new Color(0x154734)    // green-ish for Add
-                : new Color(0x1F2A44);   // slate-blue for Edit
+        final Color accentBg = (mode == Mode.ADD) ? new Color(0x154734) : new Color(0x1F2A44);
         final Color accentFg = new Color(0xEAF2FF);
 
         final RoundedPanel header = new RoundedPanel(accentBg, AppTheme.WINDOW_CORNER_ARC);
@@ -114,7 +124,6 @@ public final class TaskEditorDialog extends JDialog {
         titles.add(hdrSub);
         header.add(titles, BorderLayout.CENTER);
 
-        // ===== Form =====
         JPanel form = new JPanel(new GridBagLayout());
         form.setOpaque(false);
         GridBagConstraints gc = new GridBagConstraints();
@@ -143,7 +152,6 @@ public final class TaskEditorDialog extends JDialog {
         descriptionArea.getDocument().addDocumentListener((UiUtils.simpleDocListener(e -> {
             int len = descriptionArea.getText().length();
             if (len > 500) {
-                // hard cap
                 descriptionArea.setText(descriptionArea.getText().substring(0, 500));
                 len = 500;
             }
@@ -170,7 +178,6 @@ public final class TaskEditorDialog extends JDialog {
         stateCombo.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         form.add(stateCombo, gc);
 
-        // Prefill if editing
         if (mode == Mode.EDIT && prefill != null) {
             titleField.setText(Objects.toString(prefill.title(), ""));
             descriptionArea.setText(Objects.toString(prefill.description(), ""));
@@ -180,7 +187,6 @@ public final class TaskEditorDialog extends JDialog {
             stateCombo.setSelectedItem(TaskState.ToDo);
         }
 
-        // ===== Actions =====
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         actions.setOpaque(false);
 
@@ -196,7 +202,6 @@ public final class TaskEditorDialog extends JDialog {
         actions.add(cancelButton);
         actions.add(okButton);
 
-        // Assemble
         root.add(header, BorderLayout.NORTH);
         root.add(form, BorderLayout.CENTER);
         root.add(actions, BorderLayout.SOUTH);
@@ -206,10 +211,6 @@ public final class TaskEditorDialog extends JDialog {
 
         return root;
     }
-
-    // ---------------------------------------------------------------------
-    // Behavior
-    // ---------------------------------------------------------------------
 
     private void onConfirm() {
         final String title = titleField.getText().trim();
@@ -232,17 +233,13 @@ public final class TaskEditorDialog extends JDialog {
         dispose();
     }
 
-    // ---------------------------------------------------------------------
-    // API
-    // ---------------------------------------------------------------------
-
     /**
      * Displays the dialog modally and returns the user input if confirmed.
      *
      * @param parent  parent component (for centering)
      * @param mode    dialog mode (ADD or EDIT)
      * @param prefill optional prefilled values for EDIT mode
-     * @return Optional containing EditorResult if user confirmed, otherwise empty
+     * @return an {@link Optional} containing {@link EditorResult} if the user confirmed; otherwise empty
      */
     public static Optional<EditorResult> showDialog(Component parent, Mode mode, Prefill prefill) {
         Window owner = (parent instanceof Window) ? (Window) parent : SwingUtilities.getWindowAncestor(parent);

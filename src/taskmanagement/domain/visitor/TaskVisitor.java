@@ -2,9 +2,13 @@ package taskmanagement.domain.visitor;
 
 /**
  * Visitor interface required by the project (see Requirements.md).
- * Extends {@link ITaskVisitor} so {@code ITask.accept(TaskVisitor)} works
- * while keeping a single set of visit methods.
+ * <p>
+ * Extends {@link ITaskVisitor} so that domain tasks can call
+ * {@code ITask.accept(TaskVisitor)} with a unified visitor type.
+ * No additional methods are defined; this type exists to satisfy
+ * the required interface signature in the project specification.
+ * </p>
  */
 public interface TaskVisitor extends ITaskVisitor {
-    // No extra members; this type exists to match the required signature.
+    // Marker interface extending ITaskVisitor
 }

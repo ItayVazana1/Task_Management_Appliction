@@ -11,29 +11,19 @@ import java.awt.*;
 import java.awt.event.ActionEvent;
 
 /**
- * TaskDetailsDialog
- * -----------------
- * Modal dialog that **presents** task details in a read-only, presentation-only view
- * (MVVM-safe: no DAO/model access and no state mutations).
- *
- * Layout:
- *   • Header:     Title (large) and under it a small "ID: N"
- *   • Body order: Title → ID → Status (colored pill) → Description (multiline)
- *
- * Notes:
- *   • Description area is strictly view-only (no focus/selection/drag).
- *   • Styling is aligned with AboutDialog (RoundedPanel, AppTheme, UiUtils).
+ * Modal dialog that presents task details in a read-only, presentation-only view.
+ * <p>
+ * MVVM-safe: performs no DAO/model access and no state mutations.
  */
 public final class TaskDetailsDialog extends JDialog {
 
-    /** Default action button that closes the dialog. */
     private JButton closeButton;
 
     /**
      * Shows a modal Task Details dialog for the given task.
      *
-     * @param parent any component inside the owner window (may be {@code null})
-     * @param task   the task to display (must not be {@code null})
+     * @param parent a component inside the owner window; may be {@code null}
+     * @param task   the task to display; must not be {@code null}
      * @throws NullPointerException if {@code task} is {@code null}
      */
     public static void showDialog(Component parent, ITask task) {
@@ -43,10 +33,10 @@ public final class TaskDetailsDialog extends JDialog {
     }
 
     /**
-     * Creates the dialog. Prefer {@link #showDialog(Component, ITask)}.
+     * Creates the dialog. Prefer using {@link #showDialog(Component, ITask)}.
      *
-     * @param owner window owner (may be {@code null})
-     * @param task  task to display (must not be {@code null})
+     * @param owner window owner; may be {@code null}
+     * @param task  task to display; must not be {@code null}
      * @throws NullPointerException if {@code task} is {@code null}
      */
     public TaskDetailsDialog(Window owner, ITask task) {
@@ -60,7 +50,6 @@ public final class TaskDetailsDialog extends JDialog {
         setLocationRelativeTo(owner);
         getRootPane().setDefaultButton(closeButton);
 
-        // Close on ESC (accessibility/usability)
         var im = getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
         var am = getRootPane().getActionMap();
         im.put(KeyStroke.getKeyStroke("ESCAPE"), "close");
@@ -69,23 +58,13 @@ public final class TaskDetailsDialog extends JDialog {
         });
     }
 
-    // ---------------------------------------------------------------------
-    // UI
-    // ---------------------------------------------------------------------
-
-    /**
-     * Builds the dialog content for the given task.
-     * Header shows Title (large) and a small "ID: N". Body lists Title, ID, Status and Description.
-     */
     private JComponent buildContent(ITask t) {
         final RoundedPanel root = new RoundedPanel(AppTheme.PANEL_BG, AppTheme.TB_CORNER_RADIUS);
         root.setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
         root.setLayout(new BorderLayout(0, 12));
 
-        // ===== Header =====
         Icon taskIcon = UiUtils.loadRasterIcon("/taskmanagement/ui/resources/task.png", 40, 40);
 
-        // Title (big) + ID (small)
         JLabel title = new JLabel(ellipsize(t.getTitle(), 60));
         title.setFont(new Font("Segoe UI", Font.BOLD, 18));
         title.setForeground(AppTheme.MAIN_TEXT);
@@ -106,7 +85,6 @@ public final class TaskDetailsDialog extends JDialog {
         if (taskIcon != null) header.add(new JLabel(taskIcon), BorderLayout.WEST);
         header.add(titles, BorderLayout.CENTER);
 
-        // ===== Body =====
         JPanel body = new JPanel();
         body.setOpaque(false);
         body.setLayout(new GridBagLayout());
@@ -115,22 +93,19 @@ public final class TaskDetailsDialog extends JDialog {
         g.insets = new Insets(6, 4, 6, 8);
         g.anchor = GridBagConstraints.NORTHWEST;
 
-        // Status
         g.gridy++; body.add(dim("Status:"), g);
         g.gridx = 1; body.add(pill(t.getState().name()), g);
 
-        // Description (multiline, non-selectable)
         g.gridx = 0; g.gridy++; body.add(dim("Description:"), g);
         g.gridx = 1; g.fill = GridBagConstraints.HORIZONTAL; g.weightx = 1.0;
         JTextArea ta = new JTextArea(t.getDescription() == null ? "" : t.getDescription());
-        ta.setEditable(false);            // not editable
+        ta.setEditable(false);
         ta.setLineWrap(true);
         ta.setWrapStyleWord(true);
         ta.setBackground(new Color(60, 60, 60));
         ta.setForeground(new Color(235, 235, 235));
         ta.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         ta.setBorder(new EmptyBorder(8, 8, 8, 8));
-        // strict view-only: no focus/selection/drag cursor
         ta.setFocusable(false);
         ta.setHighlighter(null);
         ta.setDragEnabled(false);
@@ -142,7 +117,6 @@ public final class TaskDetailsDialog extends JDialog {
         sp.setPreferredSize(new Dimension(420, 160));
         body.add(sp, g);
 
-        // ===== Actions =====
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         actions.setOpaque(false);
 
@@ -153,18 +127,12 @@ public final class TaskDetailsDialog extends JDialog {
         closeButton.addActionListener(e -> dispose());
         actions.add(closeButton);
 
-        // Assemble
         root.add(header, BorderLayout.NORTH);
         root.add(body, BorderLayout.CENTER);
         root.add(actions, BorderLayout.SOUTH);
         return root;
     }
 
-    // ---------------------------------------------------------------------
-    // Small styled helpers (kept self-contained)
-    // ---------------------------------------------------------------------
-
-    /** Creates a small bold label used for field captions. */
     private static JLabel dim(String s) {
         JLabel l = new JLabel(s);
         l.setForeground(AppTheme.MAIN_TEXT);
@@ -172,7 +140,6 @@ public final class TaskDetailsDialog extends JDialog {
         return l;
     }
 
-    /** Creates a normal label for field values, with light foreground color. */
     private static JLabel val(String s) {
         JLabel l = new JLabel(s == null ? "" : s);
         l.setForeground(new Color(235, 235, 235));
@@ -180,7 +147,6 @@ public final class TaskDetailsDialog extends JDialog {
         return l;
     }
 
-    /** Returns a colored “pill” label for task status. */
     private static JLabel pill(String status) {
         String s = status == null ? "" : status;
         JLabel l = new JLabel(s, SwingConstants.CENTER);
@@ -199,7 +165,6 @@ public final class TaskDetailsDialog extends JDialog {
         return l;
     }
 
-    /** Truncates long strings with an ellipsis to fit the header. */
     private static String ellipsize(String s, int max) {
         if (s == null) return "";
         if (s.length() <= max) return s;

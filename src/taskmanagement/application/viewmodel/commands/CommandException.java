@@ -1,22 +1,39 @@
 package taskmanagement.application.viewmodel.commands;
 
 /**
- * Wraps low-level exceptions (DAO/validation) thrown while executing or undoing a command,
- * so the ViewModel can expose a single checked exception upward to the UI.
+ * Exception type representing errors that occur during command execution or undo.
+ * <p>
+ * This exception wraps lower-level exceptions (such as DAO or validation errors)
+ * so that the ViewModel can propagate a single checked exception type to the UI.
+ * </p>
  */
 public class CommandException extends Exception {
 
-    /** Creates a new CommandException with message only. */
+    /**
+     * Constructs a new {@code CommandException} with the specified detail message.
+     *
+     * @param message the detail message
+     */
     public CommandException(String message) {
         super(message);
     }
 
-    /** Creates a new CommandException with message and cause. */
+    /**
+     * Constructs a new {@code CommandException} with the specified detail message
+     * and cause.
+     *
+     * @param message the detail message
+     * @param cause   the underlying cause of this exception
+     */
     public CommandException(String message, Throwable cause) {
         super(message, cause);
     }
 
-    /** Creates a new CommandException with cause only. */
+    /**
+     * Constructs a new {@code CommandException} with the specified cause.
+     *
+     * @param cause the underlying cause of this exception
+     */
     public CommandException(Throwable cause) {
         super(cause);
     }

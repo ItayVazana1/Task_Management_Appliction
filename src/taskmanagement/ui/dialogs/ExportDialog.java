@@ -13,18 +13,20 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * ExportDialog
- * ------------
- * Modal dialog for configuring task export:
- *  • Choose file destination
- *  • Select export format (CSV / TXT)
- *
- * MVVM-safe: caller is responsible for invoking the ViewModel export command.
- * Backward-compat note: ExportResult still contains 'onlyFiltered' (always false) to avoid API changes.
+ * Modal dialog for configuring task export (file destination and format).
+ * <p>
+ * Presentation-only (MVVM-safe). The caller is responsible for invoking the
+ * ViewModel export command based on the returned {@link #showDialog(Component)} result.
  */
 public final class ExportDialog extends JDialog {
 
-    /** Result DTO for export configuration chosen by the user. */
+    /**
+     * Result of the export configuration chosen by the user.
+     *
+     * @param file         the target file
+     * @param format       the selected export format
+     * @param onlyFiltered legacy flag retained for API compatibility (always {@code false})
+     */
     public static record ExportResult(File file, ExportFormat format, boolean onlyFiltered) {}
 
     private final JTextField pathField = new JTextField(28);
@@ -34,23 +36,19 @@ public final class ExportDialog extends JDialog {
 
     /**
      * Constructs the export dialog as a modal child of the given owner.
-     * @param owner parent window; may be null
+     *
+     * @param owner parent window; may be {@code null}
      */
     public ExportDialog(Window owner) {
         super(owner, "Export Tasks", ModalityType.APPLICATION_MODAL);
-
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         setContentPane(buildContent());
         pack();
         setResizable(false);
         setLocationRelativeTo(owner);
-
-        // Default button (Enter triggers export)
         if (exportButton != null) {
             getRootPane().setDefaultButton(exportButton);
         }
-
-        // ESC to cancel
         getRootPane().registerKeyboardAction(e -> {
                     confirmed = false;
                     dispose();
@@ -59,10 +57,6 @@ public final class ExportDialog extends JDialog {
                 JComponent.WHEN_IN_FOCUSED_WINDOW
         );
     }
-
-    // ---------------------------------------------------------------------
-    // UI
-    // ---------------------------------------------------------------------
 
     private JComponent buildContent() {
         RoundedPanel root = new RoundedPanel(AppTheme.PANEL_BG, AppTheme.WINDOW_CORNER_ARC);
@@ -82,29 +76,26 @@ public final class ExportDialog extends JDialog {
         gc.weightx = 1.0;
         gc.gridx = 0;
 
-        // File path
         gc.gridy = 0;
         form.add(makeLabel("File:"), gc);
         gc.gridy = 1;
         try {
             UiUtils.styleTextFieldForDarkCentered(pathField);
-        } catch (Throwable ignored) { /* optional styling only */ }
+        } catch (Throwable ignored) { }
         form.add(pathField, gc);
 
         JButton browseBtn = new JButton("Browse…");
         try {
             UiUtils.styleStableHoverButton(browseBtn, AppTheme.TB_SHOW_SELECTED_BG, AppTheme.MAIN_TEXT);
-        } catch (Throwable ignored) { /* optional styling only */ }
+        } catch (Throwable ignored) { }
         browseBtn.addActionListener(e -> chooseFile());
         gc.gridy = 2;
         form.add(browseBtn, gc);
 
-        // Format
         gc.gridy = 3;
         form.add(makeLabel("Format:"), gc);
         gc.gridy = 4;
 
-        // Pretty renderer for enum values
         formatCombo.setRenderer(new DefaultListCellRenderer() {
             @Override public Component getListCellRendererComponent(JList<?> list, Object value, int index,
                                                                     boolean isSelected, boolean cellHasFocus) {
@@ -114,11 +105,9 @@ public final class ExportDialog extends JDialog {
                 return super.getListCellRendererComponent(list, text, index, isSelected, cellHasFocus);
             }
         });
-        // When format changes, harmonize extension in the path field (if any)
         formatCombo.addActionListener(e -> harmonizePathWithSelectedFormat());
         form.add(formatCombo, gc);
 
-        // Actions
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         actions.setOpaque(false);
 
@@ -128,7 +117,7 @@ public final class ExportDialog extends JDialog {
         try {
             UiUtils.styleStableHoverButton(exportButton, AppTheme.TB_FILTER_APPLY_BG, AppTheme.MAIN_TEXT);
             UiUtils.styleStableHoverButton(cancelBtn, AppTheme.TB_SORT_RESET_BG, AppTheme.MAIN_TEXT);
-        } catch (Throwable ignored) { /* optional styling only */ }
+        } catch (Throwable ignored) { }
 
         exportButton.addActionListener(e -> onExport());
         cancelBtn.addActionListener(e -> {
@@ -152,10 +141,6 @@ public final class ExportDialog extends JDialog {
         return l;
     }
 
-    // ---------------------------------------------------------------------
-    // Behavior
-    // ---------------------------------------------------------------------
-
     private void onExport() {
         String p = pathField.getText().trim();
         if (p.isEmpty()) {
@@ -167,12 +152,10 @@ public final class ExportDialog extends JDialog {
             );
             return;
         }
-        // Enforce extension based on selected format
         ExportFormat fmt = currentFormat();
         File f = new File(p);
         f = ensureExtension(f, extFor(fmt));
         pathField.setText(f.getAbsolutePath());
-
         confirmed = true;
         dispose();
     }
@@ -185,7 +168,6 @@ public final class ExportDialog extends JDialog {
         chooser.setDialogTitle("Choose export file");
         chooser.setFileFilter(new FileNameExtensionFilter(ext.toUpperCase(Locale.ROOT) + " files", ext));
 
-        // Suggest file name if empty
         if (pathField.getText().isBlank()) {
             chooser.setSelectedFile(new File("tasks_export." + ext));
         }
@@ -193,7 +175,7 @@ public final class ExportDialog extends JDialog {
         int result = chooser.showSaveDialog(this);
         if (result == JFileChooser.APPROVE_OPTION) {
             File file = chooser.getSelectedFile();
-            file = ensureExtension(file, ext); // append/replace extension
+            file = ensureExtension(file, ext);
             pathField.setText(file.getAbsolutePath());
         }
     }
@@ -215,7 +197,6 @@ public final class ExportDialog extends JDialog {
         return (fmt == ExportFormat.TXT) ? "txt" : "csv";
     }
 
-    /** Ensure the file has the given extension; replace a different one if present. */
     private static File ensureExtension(File file, String ext) {
         String name = file.getName();
         int dot = name.lastIndexOf('.');
@@ -230,28 +211,22 @@ public final class ExportDialog extends JDialog {
         return new File(file.getParentFile() == null ? new File(".") : file.getParentFile(), name);
     }
 
-    // ---------------------------------------------------------------------
-    // API
-    // ---------------------------------------------------------------------
-
     /**
-     * Show the export dialog and return chosen options if confirmed.
+     * Shows the export dialog and returns chosen options if confirmed.
+     *
      * @param parent parent component for centering
-     * @return Optional containing ExportResult if confirmed; otherwise empty
+     * @return an {@link Optional} containing {@link ExportResult} if confirmed; otherwise empty
      */
     public static Optional<ExportResult> showDialog(Component parent) {
         Window owner = (parent instanceof Window) ? (Window) parent : SwingUtilities.getWindowAncestor(parent);
         ExportDialog dlg = new ExportDialog(owner);
         dlg.setVisible(true);
-
         if (!dlg.confirmed) {
             return Optional.empty();
         }
-
         File file = new File(dlg.pathField.getText().trim());
         ExportFormat format = dlg.currentFormat();
-        boolean onlyFiltered = false; // UI option removed; keep API compatibility
+        boolean onlyFiltered = false;
         return Optional.of(new ExportResult(file, format, onlyFiltered));
-        // If you want to drop the boolean entirely, change the record and adjust ToolBox accordingly.
     }
 }

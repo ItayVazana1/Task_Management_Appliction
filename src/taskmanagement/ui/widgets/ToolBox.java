@@ -10,7 +10,7 @@ import taskmanagement.application.viewmodel.sort.SortStrategy;
 
 import taskmanagement.domain.TaskState;
 import taskmanagement.domain.filter.ITaskFilter;
-import taskmanagement.domain.filter.Filters; // ← NEW: combinator filters (titleContains, byState, etc.)
+import taskmanagement.domain.filter.Filters;
 import taskmanagement.ui.api.TasksViewAPI;
 
 // ===== Export wiring =====
@@ -31,27 +31,11 @@ import java.util.function.Supplier;
 import java.util.stream.IntStream;
 
 /**
- * ToolBox
- * <p>Right-side vertical toolbox split into six sections:</p>
- * <ol>
- *   <li>20% — Undo / Redo</li>
- *   <li>20% — Advance / Mark as…</li>
- *   <li>10% — Sort (combo + Apply / Reset)</li>
- *   <li>30% — Filter (title + checkboxes) + Apply / Reset / Show Filtered</li>
- *   <li>5%  — Counters: Selected / Total</li>
- *   <li>15% — Export</li>
- * </ol>
- *
- * <h3>Wiring</h3>
- * <ul>
- *   <li>Use {@link #wireTo(TasksViewAPI, IdsProvider, Function, Supplier, ExportHandler, Property)}
- *   to fully bind actions + counters in one shot.</li>
- *   <li>Or use incremental setters: {@link #setApi(TasksViewAPI)}, {@link #setIdsProvider(IdsProvider)},
- *   {@link #setSortMapper(Function)}, {@link #bindSortControls(List)}, {@link #setFilterSupplier(Supplier)},
- *   {@link #setExportHandler(ExportHandler)}, {@link #bindSelectionProperty(Property)}.</li>
- * </ul>
- *
- * <p>View-only: no direct access to Model/DAO; calls are delegated to {@link TasksViewAPI}.</p>
+ * A right-side toolbox composed of six sections (Undo/Redo, Advance/Mark, Sort, Filter, Counters, Export).
+ * <p>
+ * This view delegates user actions to {@link TasksViewAPI} (MVVM). It exposes wiring helpers to bind
+ * selection, sorting strategies, filters (Combinator), and exporting behavior.
+ * </p>
  */
 public final class ToolBox extends RoundedPanel {
 
@@ -72,12 +56,10 @@ public final class ToolBox extends RoundedPanel {
     private final JButton sortResetBtn = new JButton("Reset");
 
     // === Section 4: Filter (title + checkboxes) + Apply / Reset / Show Filtered ===
-    private final JTextField titleField = new JTextField(); // ← NEW: title filter text field
-
+    private final JTextField titleField = new JTextField();
     private final JCheckBox cbTodo       = new JCheckBox("To-Do");
     private final JCheckBox cbInProgress = new JCheckBox("In-Progress");
     private final JCheckBox cbCompleted  = new JCheckBox("Completed");
-
     private final JButton       filterApplyBtn  = new JButton("Apply");
     private final JButton       filterResetBtn  = new JButton("Reset");
     private final JToggleButton showFilteredTgl = new JToggleButton("Count filtered as total");
@@ -87,7 +69,7 @@ public final class ToolBox extends RoundedPanel {
     private final JLabel totalCountLbl    = new JLabel("Total: 0", SwingConstants.CENTER);
 
     // === Section 6: Export ===
-    private JButton exportBtn; // created in buildSection6()
+    private JButton exportBtn;
 
     // ---- Binding state ----
     private TasksViewAPI api;
@@ -95,7 +77,7 @@ public final class ToolBox extends RoundedPanel {
     private Function<String, SortStrategy> sortMapper;
     private Supplier<ITaskFilter> filterSupplier;
     private ExportHandler exportHandler;
-    private Property<int[]> selectionProp; // for counters
+    private Property<int[]> selectionProp;
 
     // Keep listeners to avoid GC (when bound via properties)
     private Property.Listener<List<ITask>> tasksListener;
@@ -105,7 +87,9 @@ public final class ToolBox extends RoundedPanel {
     // Internal name->strategy map for bindSortControls
     private final Map<String, SortStrategy> sortMap = new LinkedHashMap<>();
 
-    /** Constructs the toolbox panel with the 6-section layout. */
+    /**
+     * Creates the toolbox panel with all six sections and placeholder wiring.
+     */
     public ToolBox() {
         super(AppTheme.PANEL_BG, AppTheme.TB_CORNER_RADIUS);
         setOpaque(false);
@@ -123,34 +107,27 @@ public final class ToolBox extends RoundedPanel {
         root.fill = GridBagConstraints.BOTH;
         root.weightx = 1.0;
 
-        // 1) Undo/Redo — 20%
+        // Section layout proportions.
         root.gridy = 0; root.weighty = 0.20;
         add(buildSection1_UndoRedo(), root);
 
-        // 2) Advance / Mark as… — 20%
         root.gridy = 1; root.weighty = 0.20;
         add(buildSection2_AdvanceMark(), root);
 
-        // 3) Sort — 10%
         root.gridy = 2; root.weighty = 0.10;
         add(buildSection3_Sort(), root);
 
-        // 4) Filter — 30%
         root.gridy = 3; root.weighty = 0.30;
         add(buildSection4_Filter(), root);
 
-        // 5) Counters — 5%
         root.gridy = 4; root.weighty = 0.05;
         add(buildSection5_Counters(), root);
 
-        // 6) Export — 15%
         root.gridy = 5; root.weighty = 0.15;
         add(buildSection6_Export(), root);
 
         wirePlaceholders();
     }
-
-    // ---------- Section builders ----------
 
     private JPanel buildSection1_UndoRedo() {
         JPanel p = makeTransparent();
@@ -200,7 +177,7 @@ public final class ToolBox extends RoundedPanel {
         sortCombo.setPreferredSize(new Dimension(AppTheme.TB_FIELD_WIDTH, AppTheme.TB_FIELD_HEIGHT));
 
         GridBagConstraints t = new GridBagConstraints();
-        t.insets = new Insets(AppTheme.TB_PAD, AppTheme.TB_PAD, AppTheme.TB_PAD, AppTheme.TB_PAD);
+        t.insets = new Insets(AppTheme.TB_PAD, AppTheme.TB_PAD, AppTheme.TB_PAD / 2, AppTheme.TB_PAD);
         t.gridx = 0; t.gridy = 0; t.anchor = GridBagConstraints.WEST;
         top.add(sortLbl, t);
         t.gridx = 1; t.gridy = 0; t.weightx = 1.0; t.fill = GridBagConstraints.HORIZONTAL;
@@ -231,7 +208,6 @@ public final class ToolBox extends RoundedPanel {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.weightx = 1.0;
 
-        // --- Title contains (search row) ---
         JPanel search = makeTransparent();
         search.setLayout(new GridBagLayout());
         JLabel titleLbl = new JLabel("Title contains");
@@ -249,7 +225,6 @@ public final class ToolBox extends RoundedPanel {
         gbc.weighty = 0.15;
         p.add(search, gbc);
 
-        // --- Checkboxes list ---
         JPanel list = makeTransparent();
         list.setLayout(new GridBagLayout());
 
@@ -269,7 +244,6 @@ public final class ToolBox extends RoundedPanel {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         p.add(list, gbc);
 
-        // --- Buttons + toggle ---
         JPanel buttonsArea = makeTransparent();
         buttonsArea.setLayout(new GridBagLayout());
 
@@ -363,28 +337,33 @@ public final class ToolBox extends RoundedPanel {
         return p;
     }
 
-    // ---------- Wiring ----------
-
     private void wirePlaceholders() {
-        // keep placeholders for Undo/Redo + Advance/Mark
+        // Default placeholder actions until MVVM wiring is provided.
         undoBtn.addActionListener(e -> JOptionPane.showMessageDialog(this,"Undo (placeholder)","Undo",JOptionPane.INFORMATION_MESSAGE));
         redoBtn.addActionListener(e -> JOptionPane.showMessageDialog(this,"Redo (placeholder)","Redo",JOptionPane.INFORMATION_MESSAGE));
         advanceBtn.addActionListener(e -> JOptionPane.showMessageDialog(this,"Advance (placeholder)","Advance",JOptionPane.INFORMATION_MESSAGE));
         markAsBtn.addActionListener(e -> JOptionPane.showMessageDialog(this,"Mark as… (placeholder)","Mark",JOptionPane.INFORMATION_MESSAGE));
 
-        // Filter placeholders (replaced by bindFilterControls / setFilterSupplier)
         filterApplyBtn.addActionListener(e -> JOptionPane.showMessageDialog(this,"Filter Apply (placeholder)","Filter",JOptionPane.INFORMATION_MESSAGE));
         filterResetBtn.addActionListener(e -> JOptionPane.showMessageDialog(this,"Filter Reset (placeholder)","Filter",JOptionPane.INFORMATION_MESSAGE));
-        showFilteredTgl.addActionListener(e -> updateTotalsFromApi()); // safe: updates counter only
+        showFilteredTgl.addActionListener(e -> updateTotalsFromApi());
 
-        // Default Export: open ExportDialog and call API (will be replaced if setExportHandler() is used)
         if (exportBtn != null) {
             for (var l : exportBtn.getActionListeners()) exportBtn.removeActionListener(l);
             exportBtn.addActionListener(e -> openExportDialogAndRun());
         }
     }
 
-    /** Full binding (actions + counters) in one call. */
+    /**
+     * Full binding helper (actions, counters, filters, export).
+     *
+     * @param api               the UI-facing API
+     * @param idsProvider       provider for selected task IDs
+     * @param sortMapper        mapping from combo text to a {@link SortStrategy}
+     * @param filterSupplier    supplier for composed {@link ITaskFilter}
+     * @param exportHandler     handler that performs export
+     * @param selectionProperty observable selection property
+     */
     public void wireTo(TasksViewAPI api,
                        IdsProvider idsProvider,
                        Function<String, SortStrategy> sortMapper,
@@ -403,13 +382,14 @@ public final class ToolBox extends RoundedPanel {
     }
 
     /**
-     * Minimal safe wiring for existing code that calls setApi(api) only.
-     * Binds Undo/Redo; Sort Reset will be bound when sortMapper is provided.
+     * Binds the API and wires safe default actions (undo/redo and filter reset).
+     *
+     * @param api the {@link TasksViewAPI} to use
+     * @throws NullPointerException if api is null
      */
     public void setApi(TasksViewAPI api) {
         this.api = Objects.requireNonNull(api, "api");
 
-        // Clear & bind only safe ops
         for (var l : undoBtn.getActionListeners()) undoBtn.removeActionListener(l);
         for (var l : redoBtn.getActionListeners()) redoBtn.removeActionListener(l);
         for (var l : filterResetBtn.getActionListeners()) filterResetBtn.removeActionListener(l);
@@ -417,27 +397,36 @@ public final class ToolBox extends RoundedPanel {
         undoBtn.addActionListener(e -> this.api.undo());
         redoBtn.addActionListener(e -> this.api.redo());
 
-        // Filter reset stays here
         filterResetBtn.addActionListener(e -> {
             clearFilterUI();
             this.api.clearFilter();
             updateTotalsFromApi();
         });
 
-        // Ensure default export uses dialog if no external handler has been set yet
         if (exportHandler == null && exportBtn != null) {
             for (var l : exportBtn.getActionListeners()) exportBtn.removeActionListener(l);
             exportBtn.addActionListener(e -> openExportDialogAndRun());
         }
     }
 
+    /**
+     * Sets the provider used to obtain currently selected task IDs.
+     *
+     * @param idsProvider provider returning selected IDs
+     * @throws NullPointerException if idsProvider is null
+     */
     public void setIdsProvider(IdsProvider idsProvider) {
         this.idsProvider = Objects.requireNonNull(idsProvider, "idsProvider");
-        updateSelectionCount(); // initial
+        updateSelectionCount();
         enableActionButtons();
     }
 
-    /** Convenience binder: populate combo from strategies and wire Apply/Reset to the VM API. */
+    /**
+     * Populates the sort combo and wires Apply/Reset using the first entry as the default.
+     *
+     * @param strategies strategies to expose
+     * @throws NullPointerException if strategies is null
+     */
     public void bindSortControls(List<SortStrategy> strategies) {
         Objects.requireNonNull(strategies, "strategies");
         sortMap.clear();
@@ -457,17 +446,21 @@ public final class ToolBox extends RoundedPanel {
         setSortMapper(key -> sortMap.get(key));
     }
 
+    /**
+     * Sets a mapper from combo text to {@link SortStrategy} and wires the buttons.
+     *
+     * @param sortMapper mapping function
+     * @throws NullPointerException if sortMapper is null
+     */
     public void setSortMapper(Function<String, SortStrategy> sortMapper) {
         this.sortMapper = Objects.requireNonNull(sortMapper, "sortMapper");
 
-        // Apply (real wiring)
         for (var l : sortApplyBtn.getActionListeners()) sortApplyBtn.removeActionListener(l);
         sortApplyBtn.addActionListener(e -> {
             String key = Optional.ofNullable((String) sortCombo.getSelectedItem()).orElse("");
             this.api.setSortStrategy(this.sortMapper.apply(key));
         });
 
-        // Reset (returns to first strategy, e.g., "ID")
         for (var l : sortResetBtn.getActionListeners()) sortResetBtn.removeActionListener(l);
         sortResetBtn.addActionListener(e -> {
             sortCombo.setSelectedIndex(0);
@@ -476,6 +469,12 @@ public final class ToolBox extends RoundedPanel {
         });
     }
 
+    /**
+     * Sets the supplier used to produce a composed {@link ITaskFilter} for Apply.
+     *
+     * @param filterSupplier filter supplier
+     * @throws NullPointerException if filterSupplier is null
+     */
     public void setFilterSupplier(Supplier<ITaskFilter> filterSupplier) {
         this.filterSupplier = Objects.requireNonNull(filterSupplier, "filterSupplier");
         for (var l : filterApplyBtn.getActionListeners()) filterApplyBtn.removeActionListener(l);
@@ -485,7 +484,12 @@ public final class ToolBox extends RoundedPanel {
         });
     }
 
-    /** Connects Filter Apply/Reset/Toggle directly to the API based on the title + checkboxes state. */
+    /**
+     * Binds the Filter UI directly to the API (Apply/Reset/Toggle).
+     *
+     * @param api the {@link TasksViewAPI} to bind
+     * @throws NullPointerException if api is null
+     */
     public void bindFilterControls(TasksViewAPI api) {
         this.api = Objects.requireNonNull(api, "api");
 
@@ -509,17 +513,14 @@ public final class ToolBox extends RoundedPanel {
         updateTotalsFromApi();
     }
 
-    /** Builds a composed filter: (Title contains) AND (State in selected set [OR-logic]) */
     private ITaskFilter buildFilterFromUI() {
         ITaskFilter f = Filters.all();
 
-        // Title contains (case-insensitive)
         String q = titleField.getText();
         if (q != null && !q.isBlank()) {
             f = f.and(Filters.titleContains(q.trim()));
         }
 
-        // States (OR over selected checkboxes)
         final EnumSet<TaskState> states = EnumSet.noneOf(TaskState.class);
         if (cbTodo.isSelected())       states.add(TaskState.ToDo);
         if (cbInProgress.isSelected()) states.add(TaskState.InProgress);
@@ -533,15 +534,19 @@ public final class ToolBox extends RoundedPanel {
         return f;
     }
 
-    /** Clears filter UI controls. */
     private void clearFilterUI() {
-        titleField.setText(""); // ← NEW: clear title search
+        titleField.setText("");
         cbTodo.setSelected(false);
         cbInProgress.setSelected(false);
         cbCompleted.setSelected(false);
     }
 
-    /** Set external export handler. If missing, default dialog-based export will be used. */
+    /**
+     * Sets a custom export handler. If not set, a dialog-based export is used.
+     *
+     * @param exportHandler handler to execute export
+     * @throws NullPointerException if exportHandler is null
+     */
     public void setExportHandler(ExportHandler exportHandler) {
         this.exportHandler = Objects.requireNonNull(exportHandler, "exportHandler");
         if (exportBtn != null) {
@@ -551,7 +556,12 @@ public final class ToolBox extends RoundedPanel {
         }
     }
 
-    /** Binds the selection property for counters and button enablement. */
+    /**
+     * Binds selection property for counters and enables/disables actions accordingly.
+     *
+     * @param selectionProperty observable selection property (IDs)
+     * @throws NullPointerException if selectionProperty is null
+     */
     public void bindSelectionProperty(Property<int[]> selectionProperty) {
         this.selectionProp = Objects.requireNonNull(selectionProperty, "selectionProperty");
 
@@ -568,7 +578,10 @@ public final class ToolBox extends RoundedPanel {
         enableActionButtons();
     }
 
-    /** Subscribes to tasks/filtered properties to keep the Total counter fresh. */
+    /**
+     * Subscribes to tasks and filtered-tasks to keep the Total counter in sync.
+     * Safe to call multiple times; replaces previous listeners.
+     */
     public void bindTotalsFromApi() {
         if (api == null) return;
 
@@ -585,7 +598,9 @@ public final class ToolBox extends RoundedPanel {
         updateTotalsFromApi();
     }
 
-    /** Replace placeholders for Advance/Mark with real actions + dialogs. */
+    /**
+     * Replaces placeholders for Advance/Mark-as with real dialogs and VM calls.
+     */
     public void bindAdvanceAndMarkDialogs() {
         for (var l : advanceBtn.getActionListeners()) advanceBtn.removeActionListener(l);
         for (var l : markAsBtn.getActionListeners()) markAsBtn.removeActionListener(l);
@@ -595,9 +610,6 @@ public final class ToolBox extends RoundedPanel {
         enableActionButtons();
     }
 
-    // ---------- Export helpers ----------
-
-    /** Default: open ExportDialog and call the API. Used unless a custom ExportHandler is set. */
     private void openExportDialogAndRun() {
         if (api == null) {
             JOptionPane.showMessageDialog(this,
@@ -624,8 +636,6 @@ public final class ToolBox extends RoundedPanel {
             }
         });
     }
-
-    // ---------- Actions ----------
 
     private void onAdvance() {
         int[] ids = safeIds();
@@ -729,8 +739,6 @@ public final class ToolBox extends RoundedPanel {
         dlg.setVisible(true);
     }
 
-    // ---------- Counters ----------
-
     private void updateSelectionCount() {
         int sel = 0;
         if (selectionProp != null && selectionProp.getValue() != null) {
@@ -770,8 +778,6 @@ public final class ToolBox extends RoundedPanel {
                 ? java.util.List.of()
                 : IntStream.of(ids).boxed().toList();
     }
-
-    // ---------- Styling helpers ----------
 
     private static JPanel makeTransparent() {
         JPanel p = new JPanel();
@@ -854,7 +860,7 @@ public final class ToolBox extends RoundedPanel {
     private static Icon safeIcon(Icon icon) {
         if (icon != null) return icon;
         return new Icon() {
-            @Override public void paintIcon(Component c, Graphics g, int x, int y) { /* no-op */ }
+            @Override public void paintIcon(Component c, Graphics g, int x, int y) { }
             @Override public int getIconWidth() { return 1; }
             @Override public int getIconHeight() { return 1; }
         };
@@ -868,52 +874,82 @@ public final class ToolBox extends RoundedPanel {
         cb.setFont(AppTheme.TB_RADIO_FONT);
     }
 
-    // ---------- Public API (for MVVM wiring) ----------
-
-    /** Updates counters text (you may call manually, but normally auto-bound). */
+    /**
+     * Updates counters text. Typically invoked automatically via bindings.
+     *
+     * @param selected number of selected tasks (non-negative)
+     * @param total    total number of tasks (non-negative)
+     */
     public void updateCounters(int selected, int total) {
         selectedCountLbl.setText("Selected: " + Math.max(0, selected));
         totalCountLbl.setText("Total: " + Math.max(0, total));
     }
 
+    /** @return the Undo button component. */
     public JButton getUndoButton() { return undoBtn; }
+    /** @return the Redo button component. */
     public JButton getRedoButton() { return redoBtn; }
+    /** @return the Advance button component. */
     public JButton getAdvanceButton() { return advanceBtn; }
+    /** @return the Mark-as button component. */
     public JButton getMarkAsButton() { return markAsBtn; }
+    /** @return the sort combo box. */
     public JComboBox<String> getSortCombo() { return sortCombo; }
+    /** @return the Sort Apply button. */
     public JButton getSortApplyButton() { return sortApplyBtn; }
+    /** @return the Sort Reset button. */
     public JButton getSortResetButton() { return sortResetBtn; }
+    /** @return the To-Do checkbox. */
     public JCheckBox getCbTodo() { return cbTodo; }
+    /** @return the In-Progress checkbox. */
     public JCheckBox getCbInProgress() { return cbInProgress; }
+    /** @return the Completed checkbox. */
     public JCheckBox getCbCompleted() { return cbCompleted; }
+    /** @return the Filter Apply button. */
     public JButton getFilterApplyButton() { return filterApplyBtn; }
+    /** @return the Filter Reset button. */
     public JButton getFilterResetButton() { return filterResetBtn; }
+    /** @return the toggle that counts filtered as total. */
     public JToggleButton getShowFilteredToggle() { return showFilteredTgl; }
+    /** @return the Selected counter label. */
     public JLabel getSelectedCountLabel() { return selectedCountLbl; }
+    /** @return the Total counter label. */
     public JLabel getTotalCountLabel() { return totalCountLbl; }
+    /** @return the Export button. */
     public JButton getExportButton() { return exportBtn; }
 
-    // ---------- Helper contracts ----------
-
+    /**
+     * Supplies currently selected task IDs.
+     */
     @FunctionalInterface
     public interface IdsProvider {
-        /** @return currently selected task IDs (empty if none). */
+        /**
+         * @return selected task IDs (empty if none)
+         */
         int[] selectedIds();
     }
 
+    /**
+     * Handles exporting tasks according to user choices.
+     */
     @FunctionalInterface
     public interface ExportHandler {
+        /**
+         * Performs the export operation.
+         *
+         * @param api          bound {@link TasksViewAPI}
+         * @param useFiltered  whether to export filtered list
+         * @param selectedIds  selected task IDs to include (may be empty)
+         */
         void performExport(TasksViewAPI api, boolean useFiltered, List<Integer> selectedIds);
     }
 
-    /** Returns the current TaskState of the task with the given id by checking the preferred list. */
     private TaskState findCurrentState(int id) {
         if (api == null) return null;
         java.util.List<ITask> list = getPreferredList();
         if (list != null) {
             for (ITask t : list) if (t.getId() == id) return t.getState();
         }
-        // Fallback: use the opposite list
         list = showFilteredTgl.isSelected()
                 ? api.filteredTasksProperty().getValue()
                 : api.tasksProperty().getValue();
@@ -929,7 +965,6 @@ public final class ToolBox extends RoundedPanel {
                 : api.tasksProperty().getValue();
     }
 
-    /** Defines the forward order ToDo (0) → InProgress (1) → Completed (2). */
     private static int stateIndex(TaskState s) {
         return switch (s) {
             case ToDo -> 0;

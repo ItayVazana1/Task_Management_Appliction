@@ -8,8 +8,12 @@ import taskmanagement.domain.visitor.export.ToDoTaskRec;
 import taskmanagement.domain.visitor.reports.ByStateCount;
 
 /**
- * Visitor that counts tasks by state and returns a ByStateCount report.
- * Implements record-based visits (Visitor + Records + Pattern Matching).
+ * Visitor that counts tasks by their {@link TaskState} and produces
+ * a {@link ByStateCount} report.
+ * <p>
+ * Supports record-based visits (Visitor + Records + Pattern Matching).
+ * Can also be used directly with {@link ITask} or {@link TaskState}.
+ * </p>
  */
 public final class CountByStateVisitor implements TaskVisitor {
 
@@ -17,19 +21,30 @@ public final class CountByStateVisitor implements TaskVisitor {
     private int inProgress;
     private int completed;
 
-    /** Reset counters (optional for reuse). */
+    /**
+     * Resets all counters to zero.
+     * Useful when reusing the same visitor instance.
+     */
     public void reset() {
         todo = inProgress = completed = 0;
     }
 
-    /** Convenience bridge: allow old-style calls by delegating to accept(this). */
+    /**
+     * Counts a task by delegating to its {@link ITask#accept(TaskVisitor)} method.
+     *
+     * @param task the task to count (nullable; ignored if {@code null})
+     */
     public void visit(ITask task) {
         if (task != null) {
-            task.accept(this); // this triggers the record-specific visit(...)
+            task.accept(this);
         }
     }
 
-    /** Optional convenience: count directly from TaskState (useful in ViewModel if needed). */
+    /**
+     * Increments counters directly based on a {@link TaskState}.
+     *
+     * @param s the task state (nullable; ignored if {@code null})
+     */
     public void visit(TaskState s) {
         if (s == null) return;
         switch (s) {
@@ -38,8 +53,6 @@ public final class CountByStateVisitor implements TaskVisitor {
             case Completed -> completed++;
         }
     }
-
-    // ===== Record-based visits (required by TaskVisitor) =====
 
     @Override
     public void visit(ToDoTaskRec node) {
@@ -58,22 +71,32 @@ public final class CountByStateVisitor implements TaskVisitor {
 
     @Override
     public void complete() {
-        // no-op (hook for future use)
+        // no-op, placeholder for future extensions
     }
 
-    // ===== Report accessors =====
-
-    /** Primary accessor used by reports/adapters. */
+    /**
+     * Returns the current counts as a {@link ByStateCount} report.
+     *
+     * @return report with counts for ToDo, InProgress, and Completed states
+     */
     public ByStateCount result() {
         return new ByStateCount(todo, inProgress, completed);
     }
 
-    /** Alias accessor for compatibility. */
+    /**
+     * Alias for {@link #result()}.
+     *
+     * @return report with counts for ToDo, InProgress, and Completed states
+     */
     public ByStateCount report() {
         return result();
     }
 
-    /** Alias accessor for compatibility. */
+    /**
+     * Alias for {@link #result()}.
+     *
+     * @return report with counts for ToDo, InProgress, and Completed states
+     */
     public ByStateCount getReport() {
         return result();
     }

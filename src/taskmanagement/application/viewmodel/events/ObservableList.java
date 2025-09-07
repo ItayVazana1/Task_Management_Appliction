@@ -6,23 +6,29 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Very small observable list wrapper for UI binding.
+ * Observable list wrapper for UI binding.
  * <p>
- * Unlike a full list implementation, this wrapper keeps an internal list and
- * exposes set/clear/replace methods that fire a single "list changed" event.
- * Use this for simple table refreshes.
+ * This class does not implement the full {@link java.util.List} interface.
+ * Instead, it manages an internal list and exposes methods for replacing,
+ * clearing, and observing changes to the list as a whole.
+ * Useful for scenarios such as refreshing a UI table when the list changes.
+ * </p>
  *
- * @param <T> element type
+ * @param <T> the element type of the list
  */
 public final class ObservableList<T> {
 
-    /** Listener notified when the list reference or contents change as a whole. */
+    /**
+     * Listener notified when the list reference or contents are changed.
+     *
+     * @param <T> element type
+     */
     @FunctionalInterface
     public interface Listener<T> {
         /**
-         * Called when the list is replaced/cleared/updated.
+         * Invoked when the list has been updated.
          *
-         * @param newSnapshot immutable snapshot after the change
+         * @param newSnapshot an immutable snapshot of the updated list
          */
         void onListChanged(List<T> newSnapshot);
     }
@@ -30,12 +36,20 @@ public final class ObservableList<T> {
     private List<T> data = List.of();
     private final List<Listener<T>> listeners = new ArrayList<>();
 
-    /** Returns an immutable snapshot of current elements. */
+    /**
+     * Returns an immutable snapshot of the current list contents.
+     *
+     * @return the current immutable list
+     */
     public List<T> get() {
         return data;
     }
 
-    /** Replaces the entire content and notifies listeners. */
+    /**
+     * Replaces the entire list with the provided items and notifies listeners.
+     *
+     * @param items the new list contents; if {@code null}, the list becomes empty
+     */
     public void set(List<T> items) {
         List<T> newSnap = (items == null) ? List.of() : List.copyOf(items);
         if (!Objects.equals(this.data, newSnap)) {
@@ -44,7 +58,9 @@ public final class ObservableList<T> {
         }
     }
 
-    /** Clears the content and notifies listeners if non-empty. */
+    /**
+     * Clears the list contents and notifies listeners if it was not already empty.
+     */
     public void clear() {
         if (!data.isEmpty()) {
             this.data = List.of();
@@ -52,7 +68,12 @@ public final class ObservableList<T> {
         }
     }
 
-    /** Adds a listener; no-op if already added. */
+    /**
+     * Adds a listener to be notified when the list changes.
+     * Duplicate additions are ignored.
+     *
+     * @param l the listener to add (must not be {@code null})
+     */
     public void addListener(Listener<T> l) {
         Objects.requireNonNull(l, "listener must not be null");
         if (!listeners.contains(l)) {
@@ -60,24 +81,39 @@ public final class ObservableList<T> {
         }
     }
 
-    /** Removes a listener; no-op if not present. */
+    /**
+     * Removes a listener if present.
+     *
+     * @param l the listener to remove
+     */
     public void removeListener(Listener<T> l) {
         listeners.remove(l);
     }
 
-    /** Current listeners (unmodifiable snapshot). */
+    /**
+     * Returns an immutable snapshot of the current listeners.
+     *
+     * @return an unmodifiable list of listeners
+     */
     public List<Listener<T>> getListeners() {
         return Collections.unmodifiableList(listeners);
     }
 
+    /**
+     * Notifies all registered listeners of the current list contents.
+     * <p>
+     * Each listener receives the same immutable snapshot of the data.
+     * Runtime exceptions from one listener do not prevent notification of others.
+     * </p>
+     */
     private void fireChanged() {
         List<Listener<T>> copy = List.copyOf(listeners);
-        List<T> snap = data; // already immutable
+        List<T> snap = data; // immutable snapshot
         for (Listener<T> l : copy) {
             try {
                 l.onListChanged(snap);
             } catch (RuntimeException ex) {
-                // swallow to keep others notified; consider logging if policy exists
+                // exception suppressed to allow remaining listeners to be notified
             }
         }
     }

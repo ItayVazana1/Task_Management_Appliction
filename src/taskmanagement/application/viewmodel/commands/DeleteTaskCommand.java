@@ -7,40 +7,46 @@ import taskmanagement.persistence.TasksDAOException;
 import java.util.Objects;
 
 /**
- * {@code DeleteTaskCommand}
+ * Command that deletes a task from the DAO and supports undo by restoring it.
  * <p>
- * A concrete implementation of the Command pattern that deletes a task
- * from the DAO and supports undo by re-inserting the previously deleted task.
+ * Implements the Command design pattern:
+ * <ul>
+ *   <li>{@link #execute()} removes the task from persistence.</li>
+ *   <li>{@link #undo()} restores the previously deleted task snapshot.</li>
+ * </ul>
+ * </p>
  */
 public final class DeleteTaskCommand implements Command {
 
-    /** DAO used for persistence operations. */
     private final ITasksDAO dao;
-
-    /** Snapshot of the task that was deleted, required for undo. */
     private final ITask deletedSnapshot;
 
     /**
-     * Creates a new {@code DeleteTaskCommand}.
+     * Constructs a new {@code DeleteTaskCommand}.
      *
-     * @param dao             tasks DAO (must not be {@code null})
-     * @param deletedSnapshot full snapshot of the task being deleted (must not be {@code null})
+     * @param dao             the tasks DAO used for persistence (must not be {@code null})
+     * @param deletedSnapshot snapshot of the task to be deleted (must not be {@code null})
+     * @throws NullPointerException if {@code dao} or {@code deletedSnapshot} is {@code null}
      */
     public DeleteTaskCommand(ITasksDAO dao, ITask deletedSnapshot) {
         this.dao = Objects.requireNonNull(dao, "dao");
         this.deletedSnapshot = Objects.requireNonNull(deletedSnapshot, "deletedSnapshot");
     }
 
-    /** {@inheritDoc} */
+    /**
+     * Returns the human-readable name of this command.
+     *
+     * @return the command name
+     */
     @Override
     public String name() {
         return "Delete Task";
     }
 
     /**
-     * Executes the deletion of the task using its id.
+     * Executes the deletion of the task identified by its ID.
      *
-     * @throws TasksDAOException if the DAO cannot delete the task
+     * @throws TasksDAOException if the DAO fails to delete the task
      */
     @Override
     public void execute() throws TasksDAOException {
@@ -48,9 +54,9 @@ public final class DeleteTaskCommand implements Command {
     }
 
     /**
-     * Reverts the deletion by re-adding the previously deleted task snapshot.
+     * Restores the previously deleted task by re-inserting its snapshot.
      *
-     * @throws TasksDAOException if the DAO cannot re-insert the task
+     * @throws TasksDAOException if the DAO fails to re-add the task
      */
     @Override
     public void undo() throws TasksDAOException {

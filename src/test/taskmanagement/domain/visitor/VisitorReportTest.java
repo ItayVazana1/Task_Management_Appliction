@@ -6,25 +6,26 @@ import org.junit.Test;
 import taskmanagement.domain.Task;
 import taskmanagement.domain.TaskState;
 
-// Flat exporters (route via Task.accept(visitor))
 import taskmanagement.domain.visitor.export.CsvFlatTaskVisitor;
 import taskmanagement.domain.visitor.export.PlainTextFlatTaskVisitor;
 
-// Counting visitor + concrete report + exporters
-import taskmanagement.domain.visitor.reports.Report;          // marker
-import taskmanagement.domain.visitor.reports.ByStateCount;    // concrete
+import taskmanagement.domain.visitor.reports.Report;
+import taskmanagement.domain.visitor.reports.ByStateCount;
 import taskmanagement.domain.visitor.adapters.IReportExporter;
 import taskmanagement.domain.visitor.adapters.ByStateCsvExporter;
 import taskmanagement.domain.visitor.adapters.ByStatePlainTextExporter;
 
 /**
- * VisitorReportTest
- * -----------------
- * 1) CSV/PlainText export via Task.accept(visitor).
- * 2) Count-by-state using CountByStateVisitor and export the concrete report.
+ * JUnit 4 tests for the visitor-based reporting and exporting features.
+ * <p>
+ * Verifies flat CSV/plain-text export via {@link Task#accept(taskmanagement.domain.visitor.TaskVisitor)}
+ * and validates counting by task state with subsequent export through concrete exporters.
  */
 public class VisitorReportTest {
 
+    /**
+     * Verifies CSV export using the flat visitor routed via {@code Task.accept(visitor)}.
+     */
     @Test
     public void csv_export_via_accept() {
         Task t1 = new Task(1, "Write tests", "DAO CRUD", TaskState.ToDo);
@@ -44,6 +45,9 @@ public class VisitorReportTest {
         Assert.assertTrue(out.contains("3,\"Polish UX\",\"Dark theme\",Completed"));
     }
 
+    /**
+     * Verifies plain-text export using the flat visitor routed via {@code Task.accept(visitor)}.
+     */
     @Test
     public void plaintext_export_via_accept() {
         Task t1 = new Task(10, "A", "a", TaskState.ToDo);
@@ -65,26 +69,27 @@ public class VisitorReportTest {
         Assert.assertTrue(out.contains("State: Completed"));
     }
 
+    /**
+     * Verifies counting tasks by state via {@code CountByStateVisitor} and
+     * checks CSV/plain-text exports of the resulting report.
+     */
     @Test
     public void by_state_count_and_exporters() {
         CountByStateVisitor counter = new CountByStateVisitor();
 
-        // Count by visiting domain tasks (accept routes to the proper record via pattern matching)
         new Task(21, "T1", "x", TaskState.ToDo).accept(counter);
         new Task(22, "T2", "y", TaskState.ToDo).accept(counter);
         new Task(23, "T3", "z", TaskState.InProgress).accept(counter);
         new Task(24, "T4", "w", TaskState.Completed).accept(counter);
         new Task(25, "T5", "q", TaskState.Completed).accept(counter);
 
-        // Report is a marker interface; cast to concrete implementation to assert counts
-        Report rep = counter.report(); // or counter.result() — both exist in your code
+        Report rep = counter.report();
         ByStateCount byState = (ByStateCount) rep;
 
         Assert.assertEquals(2, byState.count(TaskState.ToDo));
         Assert.assertEquals(1, byState.count(TaskState.InProgress));
         Assert.assertEquals(2, byState.count(TaskState.Completed));
 
-        // Exporters are generic; use concrete type to avoid -Xlint:unchecked warnings
         IReportExporter<ByStateCount> csv = new ByStateCsvExporter();
         String csvOut = csv.export(byState);
         Assert.assertTrue(csvOut.startsWith("state,count"));

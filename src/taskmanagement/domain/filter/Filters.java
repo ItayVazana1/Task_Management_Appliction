@@ -3,13 +3,24 @@ package taskmanagement.domain.filter;
 import taskmanagement.domain.TaskState;
 
 /**
- * Ready-made task filters (Combinator building blocks).
- * All methods are null-safe and trimmed/lower-cased where applicable.
+ * Utility class providing ready-made task filters as building blocks
+ * for Combinator composition.
+ * <p>
+ * All methods are null-safe. Strings are trimmed and compared
+ * in lowercase where applicable.
+ * </p>
  */
 public final class Filters {
-    private Filters() {}
 
-    /** Title contains substring (case-insensitive). */
+    private Filters() { }
+
+    /**
+     * Returns a filter that matches tasks whose title contains the given substring,
+     * case-insensitive.
+     *
+     * @param needle the substring to search for (nullable, treated as empty)
+     * @return a task filter matching by title
+     */
     public static ITaskFilter titleContains(String needle) {
         final String n = safeLower(needle);
         return t -> {
@@ -18,7 +29,13 @@ public final class Filters {
         };
     }
 
-    /** Description contains substring (case-insensitive). */
+    /**
+     * Returns a filter that matches tasks whose description contains the given substring,
+     * case-insensitive.
+     *
+     * @param needle the substring to search for (nullable, treated as empty)
+     * @return a task filter matching by description
+     */
     public static ITaskFilter descriptionContains(String needle) {
         final String n = safeLower(needle);
         return t -> {
@@ -27,34 +44,56 @@ public final class Filters {
         };
     }
 
-    /** Exact id match. */
+    /**
+     * Returns a filter that matches tasks with the specified id.
+     *
+     * @param id the task id
+     * @return a task filter matching by id
+     */
     public static ITaskFilter idEquals(int id) {
         return t -> t.getId() == id;
     }
 
-    /** State equals specific value. */
+    /**
+     * Returns a filter that matches tasks in the specified state.
+     *
+     * @param state the target state (nullable)
+     * @return a task filter matching by state
+     */
     public static ITaskFilter stateIs(TaskState state) {
         return t -> t.getState() == state;
     }
 
-    /** Alias required by smoke/tests: same as {@link #stateIs(TaskState)}. */
+    /**
+     * Alias for {@link #stateIs(TaskState)}.
+     *
+     * @param state the target state (nullable)
+     * @return a task filter matching by state
+     */
     public static ITaskFilter byState(TaskState state) {
         return stateIs(state);
     }
 
-    /* ---------- helpers ---------- */
-
-    private static String safeLower(String s) {
-        return (s == null) ? "" : s.trim().toLowerCase();
-    }
-
-    /** Utility to negate a filter (aliases ITaskFilter.not). */
+    /**
+     * Returns a filter that negates the given filter.
+     *
+     * @param f the filter to negate
+     * @return negated filter
+     */
     public static ITaskFilter not(ITaskFilter f) {
         return ITaskFilter.not(f);
     }
 
-    /** Match-all (useful as a neutral element). */
+    /**
+     * Returns a filter that matches all tasks.
+     *
+     * @return match-all filter
+     */
     public static ITaskFilter all() {
         return ITaskFilter.all();
+    }
+
+    private static String safeLower(String s) {
+        return (s == null) ? "" : s.trim().toLowerCase();
     }
 }

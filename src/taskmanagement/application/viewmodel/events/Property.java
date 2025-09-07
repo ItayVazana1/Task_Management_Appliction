@@ -5,54 +5,62 @@ import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * Minimal observable property (Observer pattern).
- * <p>UI can subscribe via {@link #addListener(Listener)} and will be notified
- * on any {@link #setValue(Object)} or {@link #fireChange()}.</p>
+ * Observable property implementing the Observer pattern.
+ * <p>
+ * Listeners can subscribe via {@link #addListener(Listener)} and will be notified
+ * whenever the property's value is set or explicitly refreshed.
+ * </p>
+ * <p>
+ * Important: {@link #setValue(Object)} always notifies listeners,
+ * even if the old and new values are equal according to {@link Objects#equals(Object, Object)}.
+ * This ensures in-place updates (e.g., mutable objects) still trigger a refresh.
+ * </p>
  *
- * <p><b>Important:</b> {@link #setValue(Object)} <i>always</i> notifies listeners,
- * even if {@link Objects#equals(Object, Object)} returns true. This supports
- * in-place updates (e.g., row proxies updated internally) where old/new lists
- * may be equal by value but still require a UI refresh.</p>
- *
- * @param <T> value type (nullable)
+ * @param <T> the type of the property's value (nullable)
  */
 public final class Property<T> {
 
-    /** Listener of value changes. */
+    /**
+     * Listener interface for observing property changes.
+     *
+     * @param <T> the type of the observed value
+     */
     @FunctionalInterface
     public interface Listener<T> {
         /**
          * Called when the property's value changes.
          *
-         * @param oldValue previous value (nullable)
-         * @param newValue new value (nullable)
+         * @param oldValue the previous value (nullable)
+         * @param newValue the new value (nullable)
          */
         void onChanged(T oldValue, T newValue);
     }
 
     private volatile T value;
-    // CopyOnWriteArrayList: safe iteration during concurrent adds/removes and re-entrant notifications.
     private final List<Listener<T>> listeners = new CopyOnWriteArrayList<>();
 
     /**
-     * Creates a property with an initial value.
+     * Constructs a new property with the given initial value.
      *
-     * @param initial initial value (nullable)
+     * @param initial the initial value (nullable)
      */
     public Property(T initial) {
         this.value = initial;
     }
 
-    /** Returns the current value (nullable). */
+    /**
+     * Returns the current value of this property.
+     *
+     * @return the current value (nullable)
+     */
     public T getValue() {
         return value;
     }
 
     /**
-     * Sets a new value and <b>always</b> notifies listeners.
-     * Use {@link #setValueIfChanged(Object)} if you prefer conditional notification.
+     * Sets a new value and always notifies listeners, regardless of equality.
      *
-     * @param newValue new value (nullable)
+     * @param newValue the new value (nullable)
      */
     public void setValue(T newValue) {
         T old = this.value;
@@ -61,9 +69,10 @@ public final class Property<T> {
     }
 
     /**
-     * Sets a new value and notifies listeners only if {@code !Objects.equals(old, newValue)}.
+     * Sets a new value and notifies listeners only if the value has changed
+     * according to {@link Objects#equals(Object, Object)}.
      *
-     * @param newValue new value (nullable)
+     * @param newValue the new value (nullable)
      */
     public void setValueIfChanged(T newValue) {
         T old = this.value;
@@ -74,29 +83,45 @@ public final class Property<T> {
     }
 
     /**
-     * Notifies listeners without changing the current value.
-     * Useful after in-place mutations of the value.
+     * Notifies listeners of a change without modifying the current value.
+     * Useful when the current value is mutable and has been updated in place.
      */
     public void fireChange() {
         fireChanged(this.value, this.value);
     }
 
-    /** Adds a listener; no-op if already added. */
+    /**
+     * Registers a new listener to be notified of property changes.
+     * Duplicate additions are ignored.
+     *
+     * @param l the listener to add (must not be {@code null})
+     */
     public void addListener(Listener<T> l) {
         listeners.add(Objects.requireNonNull(l, "listener must not be null"));
     }
 
-    /** Removes a listener; no-op if not present. */
+    /**
+     * Removes a previously registered listener.
+     * Does nothing if the listener is not registered.
+     *
+     * @param l the listener to remove
+     */
     public void removeListener(Listener<T> l) {
         listeners.remove(l);
     }
 
+    /**
+     * Notifies all registered listeners of the property change.
+     *
+     * @param oldValue the old value (nullable)
+     * @param newValue the new value (nullable)
+     */
     private void fireChanged(T oldValue, T newValue) {
         for (Listener<T> l : listeners) {
             try {
                 l.onChanged(oldValue, newValue);
             } catch (RuntimeException ignored) {
-                // Listener exceptions must not break the chain.
+                // Listener exceptions are suppressed to avoid breaking the chain.
             }
         }
     }

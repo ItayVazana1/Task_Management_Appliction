@@ -7,31 +7,30 @@ import taskmanagement.domain.exceptions.ValidationException;
 import taskmanagement.persistence.ITasksDAO;
 import taskmanagement.persistence.TasksDAOException;
 
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
 /**
- * {@code EmbeddedDerbyTasksDAO}
+ * Data Access Object (DAO) implementation backed by embedded Apache Derby.
  * <p>
- * An {@link ITasksDAO} implementation over embedded Apache Derby (Single connection, Singleton).
- * <ul>
- *   <li>Pure persistence (no UI / no ViewModel logic).</li>
- *   <li>Honors the DAO contract — never returns {@code null} for "not found":
- *       throws {@link TasksDAOException} instead.</li>
- *   <li>Singleton instance with a single bootstrapped {@link Connection}.</li>
- * </ul>
+ * This implementation maintains a single connection created by {@link DerbyBootstrap}
+ * and follows the Singleton pattern via {@link #getInstance()}.
+ * It performs only persistence logic and adheres to the {@link ITasksDAO} contract.
  */
 public final class EmbeddedDerbyTasksDAO implements ITasksDAO {
 
-    /* ===== Singleton ===== */
     private static EmbeddedDerbyTasksDAO instance;
 
     /**
-     * Returns the single DAO instance (Singleton).
+     * Returns the singleton instance of this DAO.
      *
-     * @return the singleton instance
+     * @return the singleton {@code EmbeddedDerbyTasksDAO} instance
      */
     public static synchronized EmbeddedDerbyTasksDAO getInstance() {
         if (instance == null) {
@@ -40,24 +39,17 @@ public final class EmbeddedDerbyTasksDAO implements ITasksDAO {
         return instance;
     }
 
-    /* ===== State ===== */
     private final Connection conn;
 
-    /**
-     * Boots Derby and ensures schema is present (tables, indexes).
-     * Package-private by design — use {@link #getInstance()}.
-     */
     EmbeddedDerbyTasksDAO() {
         this.conn = DerbyBootstrap.bootAndEnsureSchema();
     }
 
-    /* ===== ITasksDAO ===== */
-
     /**
-     * Retrieves all tasks ordered by id.
+     * Retrieves all tasks ordered by ID.
      *
-     * @return an array of tasks (never {@code null})
-     * @throws TasksDAOException on SQL error or mapping failure
+     * @return an array containing all tasks (never {@code null})
+     * @throws TasksDAOException if a database or mapping error occurs
      */
     @Override
     public ITask[] getTasks() throws TasksDAOException {
@@ -75,11 +67,11 @@ public final class EmbeddedDerbyTasksDAO implements ITasksDAO {
     }
 
     /**
-     * Retrieves a single task by id.
+     * Retrieves a single task by its ID.
      *
-     * @param id the task id
-     * @return the task (never {@code null})
-     * @throws TasksDAOException if not found or on SQL/mapping error
+     * @param id the task ID
+     * @return the task matching the given ID
+     * @throws TasksDAOException if the task is not found or an error occurs
      */
     @Override
     public ITask getTask(int id) throws TasksDAOException {
@@ -98,18 +90,16 @@ public final class EmbeddedDerbyTasksDAO implements ITasksDAO {
     }
 
     /**
-     * Inserts a new task. If {@code task.getId() <= 0} a new id is allocated from DB.
-     * The effective id is written back into the given task object (when the implementation allows).
+     * Inserts a new task. If {@code task.getId() <= 0}, a new ID is allocated and
+     * written back into the task object when possible.
      *
      * @param task the task to insert (must not be {@code null})
-     * @throws TasksDAOException on SQL error or duplicate key
+     * @throws TasksDAOException if a database error or duplicate key occurs
      */
     @Override
     public void addTask(ITask task) throws TasksDAOException {
         Objects.requireNonNull(task, "task");
 
-        // We explicitly insert the id (no auto-increment in schema).
-        // If caller provided id <= 0, allocate the next id first.
         int idToInsert = task.getId();
         try {
             if (idToInsert <= 0) {
@@ -127,24 +117,17 @@ public final class EmbeddedDerbyTasksDAO implements ITasksDAO {
             ps.setString(4, task.getState().name());
             ps.executeUpdate();
 
-            // IMPORTANT: write the effective id back into the task object
-            // (needed for Command undo/redo logic, e.g., undo Add → delete by id)
             if (task instanceof Task t) {
                 if (t.getId() != idToInsert) {
-                    t.setId(idToInsert); // Task#setId should validate id > 0
+                    t.setId(idToInsert);
                 }
-            } else {
-                // If a different ITask implementation is used, we require it to carry the id already.
-                // Otherwise, undo/redo may not work correctly.
-                if (task.getId() <= 0) {
-                    throw new TasksDAOException(
-                            "Unsupported task implementation; cannot assign generated id to " + task.getClass().getName());
-                }
+            } else if (task.getId() <= 0) {
+                throw new TasksDAOException(
+                        "Unsupported task implementation; cannot assign generated id to " + task.getClass().getName());
             }
 
         } catch (SQLException e) {
-            // Derby duplicate key SQLState is 23505
-            if ("23505".equals(e.getSQLState())) {
+            if ("23505".equals(e.getSQLState())) { // Derby duplicate key SQLState
                 throw new TasksDAOException("Task id already exists: id=" + idToInsert, e);
             }
             throw new TasksDAOException("addTask failed for id=" + idToInsert, e);
@@ -152,10 +135,10 @@ public final class EmbeddedDerbyTasksDAO implements ITasksDAO {
     }
 
     /**
-     * Updates an existing task by id.
+     * Updates an existing task by its ID.
      *
-     * @param task the task with new values
-     * @throws TasksDAOException if task not found or on SQL error
+     * @param task the task containing updated values
+     * @throws TasksDAOException if the task is not found or a database error occurs
      */
     @Override
     public void updateTask(ITask task) throws TasksDAOException {
@@ -177,7 +160,7 @@ public final class EmbeddedDerbyTasksDAO implements ITasksDAO {
     /**
      * Deletes all tasks.
      *
-     * @throws TasksDAOException on SQL error
+     * @throws TasksDAOException if a database error occurs
      */
     @Override
     public void deleteTasks() throws TasksDAOException {
@@ -190,10 +173,10 @@ public final class EmbeddedDerbyTasksDAO implements ITasksDAO {
     }
 
     /**
-     * Deletes a single task by id.
+     * Deletes a single task by its ID.
      *
-     * @param id the task id
-     * @throws TasksDAOException if not found or on SQL error
+     * @param id the task ID
+     * @throws TasksDAOException if the task is not found or a database error occurs
      */
     @Override
     public void deleteTask(int id) throws TasksDAOException {
@@ -209,16 +192,6 @@ public final class EmbeddedDerbyTasksDAO implements ITasksDAO {
         }
     }
 
-    /* ===== Helpers ===== */
-
-    /**
-     * Maps a single row into a domain {@link Task}.
-     *
-     * @param rs the current result set row
-     * @return mapped {@link Task}
-     * @throws SQLException        on JDBC error
-     * @throws ValidationException if domain validation fails
-     */
     private Task mapRow(ResultSet rs) throws SQLException, ValidationException {
         final int id = rs.getInt("id");
         final String title = rs.getString("title");
@@ -228,15 +201,8 @@ public final class EmbeddedDerbyTasksDAO implements ITasksDAO {
         return new Task(id, title, description, state);
     }
 
-    /**
-     * Allocates the next available id from the TASKS table.
-     * <p>Starts from {@code 1} when the table is empty (IDs are always positive).</p>
-     *
-     * @return the next id (always {@code >= 1})
-     * @throws SQLException on SQL error
-     */
     private int nextId() throws SQLException {
-        final String sql = "SELECT COALESCE(MAX(id), 0) + 1 FROM TASKS"; // start from 1
+        final String sql = "SELECT COALESCE(MAX(id), 0) + 1 FROM TASKS";
         try (Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery(sql)) {
             rs.next();
@@ -245,7 +211,7 @@ public final class EmbeddedDerbyTasksDAO implements ITasksDAO {
     }
 
     /**
-     * Optional: call on app shutdown to close Derby.
+     * Shuts down the embedded Derby database quietly and closes the underlying connection.
      */
     public void shutdown() {
         DerbyBootstrap.shutdownQuietly(conn);

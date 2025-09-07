@@ -9,15 +9,13 @@ import taskmanagement.domain.visitor.export.ToDoTaskRec;
 import java.util.Objects;
 
 /**
- * Immutable-identity Task entity (id) with validated fields and
- * a behavioral state (State pattern via {@link TaskState} enum).
- *
- * <p>Notes:
- * <ul>
- *   <li>Constructors call setters to reuse validation.</li>
- *   <li>{@code setState} validates non-null and enforces forward-only transitions.</li>
- *   <li>State-pattern helpers {@link #transitionTo(TaskState)} and {@link #advanceState()} enforce legal transitions.</li>
- * </ul>
+ * Task entity with immutable identity (id), validated fields, and a behavioral state
+ * managed by the {@link TaskState} state machine.
+ * <p>
+ * Constructors delegate to setters to reuse validation logic. State changes are validated
+ * to allow only legal forward transitions, and visitor support is provided via
+ * {@link #accept(TaskVisitor)}.
+ * </p>
  */
 public class Task implements ITask {
 
@@ -27,14 +25,14 @@ public class Task implements ITask {
     private TaskState state;
 
     /**
-     * Creates a task with all fields. Setters perform validation.
+     * Constructs a task with all fields; setters perform validation.
      *
-     * @param id          task id (>= 0 recommended; DAO may assign)
+     * @param id          task id (non-negative recommended; DAO may assign)
      * @param title       non-empty title
      * @param description nullable description
      * @param state       non-null state
-     * @throws IllegalArgumentException if title is blank
-     * @throws ValidationException      if state is null or transition is illegal
+     * @throws IllegalArgumentException if {@code title} is blank
+     * @throws ValidationException      if {@code state} is {@code null} or transition is illegal
      */
     public Task(int id, String title, String description, TaskState state) {
         setId(id);
@@ -43,7 +41,12 @@ public class Task implements ITask {
         setState(state);
     }
 
-    /** Copy constructor. */
+    /**
+     * Copy constructor.
+     *
+     * @param other another task instance to copy (must not be {@code null})
+     * @throws NullPointerException if {@code other} is {@code null}
+     */
     public Task(Task other) {
         this(Objects.requireNonNull(other, "other must not be null").id,
                 other.title, other.description, other.state);
@@ -53,18 +56,29 @@ public class Task implements ITask {
     // ITask
     // ------------------------------------------------------------
 
+    /** {@inheritDoc} */
     @Override public int getId() { return id; }
 
     /**
      * Sets the identifier.
-     * <p>Note: negative ids are allowed only if your DAO uses them as placeholders.
-     * If not, keep ids >= 0.
+     * <p>
+     * Negative ids are tolerated only if your DAO uses them as placeholders;
+     * otherwise prefer non-negative ids.
+     * </p>
+     *
+     * @param id the identifier to set
      */
     public void setId(int id) { this.id = id; }
 
+    /** {@inheritDoc} */
     @Override public String getTitle() { return title; }
 
-    /** Sets a non-blank title. */
+    /**
+     * Sets a non-blank title.
+     *
+     * @param title the title to set (must not be {@code null} or blank)
+     * @throws IllegalArgumentException if {@code title} is {@code null} or blank
+     */
     public void setTitle(String title) {
         if (title == null || title.trim().isEmpty()) {
             throw new IllegalArgumentException("title must not be empty");
@@ -72,24 +86,30 @@ public class Task implements ITask {
         this.title = title.trim();
     }
 
+    /** {@inheritDoc} */
     @Override public String getDescription() { return description; }
 
-    /** Sets description (nullable). Trims when non-null. */
+    /**
+     * Sets the description (nullable). Trims when non-null.
+     *
+     * @param description description text, or {@code null}
+     */
     public void setDescription(String description) {
         this.description = (description == null) ? null : description.trim();
     }
 
+    /** {@inheritDoc} */
     @Override public TaskState getState() { return state; }
 
     /**
-     * Sets state (non-null) and enforces forward-only transitions.
-     * Allowed: ToDo → InProgress → Completed (self-sets are idempotent).
+     * Sets the state and enforces forward-only transitions.
+     * <p>
+     * Allowed transitions: ToDo → InProgress → Completed. Setting the same state is
+     * idempotent. Throws unchecked {@link ValidationException} to keep caller APIs simple.
+     * </p>
      *
-     * <p><b>No signature change:</b> throws an unchecked {@link ValidationException}
-     * to avoid ripple effects across callers.</p>
-     *
-     * @param newState the new state (must not be null)
-     * @throws ValidationException if newState is null or the transition is illegal
+     * @param newState the new state (must not be {@code null})
+     * @throws ValidationException if {@code newState} is {@code null} or the transition is illegal
      */
     public void setState(TaskState newState) {
         if (newState == null) {
@@ -105,11 +125,11 @@ public class Task implements ITask {
     }
 
     /**
-     * Transition helper using State pattern rules.
+     * Transitions to a target state if allowed by the current state's rules.
      *
-     * @param target desired target state (must not be null)
-     * @throws ValidationException if transition is not allowed
-     * @throws NullPointerException if target is null
+     * @param target desired target state (must not be {@code null})
+     * @throws ValidationException  if the transition is not allowed
+     * @throws NullPointerException if {@code target} is {@code null}
      */
     public void transitionTo(TaskState target) throws ValidationException {
         Objects.requireNonNull(target, "target must not be null");
@@ -121,7 +141,7 @@ public class Task implements ITask {
     }
 
     /**
-     * Advance to the next state per current state's behavior.
+     * Advances to the next state according to the current state's behavior.
      *
      * @throws ValidationException if advancing is not allowed
      */
@@ -133,6 +153,13 @@ public class Task implements ITask {
     // Visitor
     // ------------------------------------------------------------
 
+    /**
+     * Accepts a {@link TaskVisitor} and dispatches to the record-typed visit
+     * based on the current {@link TaskState}.
+     *
+     * @param visitor the visitor to accept (must not be {@code null})
+     * @throws NullPointerException if {@code visitor} or {@code state} is {@code null}
+     */
     @Override
     public void accept(TaskVisitor visitor) {
         Objects.requireNonNull(visitor, "visitor must not be null");
@@ -148,6 +175,12 @@ public class Task implements ITask {
     // Object contracts
     // ------------------------------------------------------------
 
+    /**
+     * Compares tasks by identity (id) only.
+     *
+     * @param o other object
+     * @return {@code true} if the other object is a {@code Task} with the same id
+     */
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -155,8 +188,14 @@ public class Task implements ITask {
         return id == other.id;
     }
 
+    /** {@inheritDoc} */
     @Override public int hashCode() { return Integer.hashCode(id); }
 
+    /**
+     * Returns a string representation of the task.
+     *
+     * @return string form including id, title, description, and state
+     */
     @Override
     public String toString() {
         return "Task{" +

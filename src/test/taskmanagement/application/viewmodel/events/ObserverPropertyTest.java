@@ -11,33 +11,31 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.Assert.*;
 
 /**
- * ObserverPropertyTest
- * --------------------
- * Unit tests for the simple Observer utilities used by the ViewModel layer:
- *  • Property<T> – value change notifications
- *  • ObservableList<T> – list snapshot change notifications
- *
- * The tests verify:
- *  • Listener is invoked on change (and for Property#setValue even if equal)
- *  • Conditional notifications for Property#setValueIfChanged
- *  • fireChange() notifies without changing value
- *  • Add/remove listeners and multiple listeners
- *  • Robustness against listener exceptions (others still receive events)
+ * JUnit 4 test suite for the ViewModel observer utilities
+ * {@code Property<T>} and {@code ObservableList<T>}.
+ * <p>
+ * Verifies listener notification semantics, conditional updates,
+ * multi-listener behavior, listener removal, and robustness in the
+ * presence of listener exceptions.
  */
 public final class ObserverPropertyTest {
 
-    // ===== Fixtures =====
     private Property<String> prop;
     private ObservableList<Integer> olist;
 
+    /**
+     * Initializes the property and observable list before each test.
+     */
     @Before
     public void setUp() {
         prop = new Property<>("A");
         olist = new ObservableList<>();
     }
 
-    // ===== Property<T> tests =====
-
+    /**
+     * Ensures {@code Property#setValue} always notifies listeners,
+     * including when the new value equals the current value.
+     */
     @Test
     public void property_setValue_alwaysNotifies_evenIfEqual() {
         final AtomicInteger calls = new AtomicInteger(0);
@@ -52,43 +50,51 @@ public final class ObserverPropertyTest {
 
         prop.addListener(l);
 
-        // initial -> "B" (different)
         prop.setValue("B");
         assertEquals(1, calls.get());
         assertEquals(List.of("A", "B"), last);
 
-        // "B" -> "B" (equal) SHOULD STILL notify (per class contract)
         prop.setValue("B");
         assertEquals(2, calls.get());
         assertEquals(List.of("B", "B"), last);
     }
 
+    /**
+     * Ensures {@code Property#setValueIfChanged} notifies listeners
+     * only when the value actually changes.
+     */
     @Test
     public void property_setValueIfChanged_notifiesOnlyWhenDifferent() {
         final AtomicInteger calls = new AtomicInteger(0);
         prop.addListener((oldV, newV) -> calls.incrementAndGet());
 
-        // current = "A" (from setUp)
-        prop.setValueIfChanged("A");  // equal -> no notify
+        prop.setValueIfChanged("A");
         assertEquals(0, calls.get());
 
-        prop.setValueIfChanged("Z");  // different -> notify
+        prop.setValueIfChanged("Z");
         assertEquals(1, calls.get());
 
-        prop.setValueIfChanged("Z");  // equal again -> no notify
+        prop.setValueIfChanged("Z");
         assertEquals(1, calls.get());
     }
 
+    /**
+     * Ensures {@code Property#fireChange()} notifies listeners using the
+     * current value as both old and new.
+     */
     @Test
     public void property_fireChange_notifiesWithSameValue() {
         final List<String> pairs = new ArrayList<>();
         prop.addListener((oldV, newV) -> pairs.add(oldV + "→" + newV));
 
-        prop.fireChange(); // old == new == "A"
+        prop.fireChange();
         assertEquals(1, pairs.size());
         assertEquals("A→A", pairs.get(0));
     }
 
+    /**
+     * Verifies that removing a listener prevents further notifications.
+     */
     @Test
     public void property_removeListener_noFurtherNotifications() {
         final AtomicInteger calls = new AtomicInteger();
@@ -100,9 +106,13 @@ public final class ObserverPropertyTest {
 
         prop.removeListener(l);
         prop.setValue("Y");
-        assertEquals(1, calls.get()); // unchanged
+        assertEquals(1, calls.get());
     }
 
+    /**
+     * Verifies multiple listeners are invoked even if one throws,
+     * and that exceptions from one listener do not prevent others.
+     */
     @Test
     public void property_multipleListeners_allAreCalled_evenIfOneThrows() {
         final AtomicInteger calls = new AtomicInteger();
@@ -111,13 +121,14 @@ public final class ObserverPropertyTest {
         prop.addListener((o, n) -> { throw new RuntimeException("boom"); });
         prop.addListener((o, n) -> calls.incrementAndGet());
 
-        // Should not fail and both non-throwing listeners should be counted
         prop.setValue("B");
         assertEquals(2, calls.get());
     }
 
-    // ===== ObservableList<T> tests =====
-
+    /**
+     * Ensures {@code ObservableList#set} notifies listeners only when the
+     * snapshot content changes.
+     */
     @Test
     public void olist_set_notifiesOnlyOnRealChange() {
         final AtomicInteger calls = new AtomicInteger(0);
@@ -127,41 +138,42 @@ public final class ObserverPropertyTest {
             snapshots.add(newSnap);
         });
 
-        // start empty; set empty -> no change, no notify
         olist.set(List.of());
         assertEquals(0, calls.get());
 
-        // set [1,2,3] -> notify
         olist.set(List.of(1, 2, 3));
         assertEquals(1, calls.get());
         assertEquals(List.of(1, 2, 3), snapshots.get(0));
 
-        // set equal content -> no notify
         olist.set(List.of(1, 2, 3));
         assertEquals(1, calls.get());
 
-        // set different -> notify
         olist.set(List.of(1, 2, 3, 4));
         assertEquals(2, calls.get());
         assertEquals(List.of(1, 2, 3, 4), snapshots.get(1));
     }
 
+    /**
+     * Ensures {@code ObservableList#clear} notifies only if the list
+     * was previously non-empty.
+     */
     @Test
     public void olist_clear_notifiesOnlyIfWasNonEmpty() {
         final AtomicInteger calls = new AtomicInteger();
         olist.addListener(newSnap -> calls.incrementAndGet());
 
-        // clear empty -> no notify
         olist.clear();
         assertEquals(0, calls.get());
 
-        // set then clear -> one notify for set + one for clear
         olist.set(List.of(9));
         assertEquals(1, calls.get());
         olist.clear();
         assertEquals(2, calls.get());
     }
 
+    /**
+     * Verifies adding and removing listeners affects notification delivery.
+     */
     @Test
     public void olist_addRemoveListeners() {
         final AtomicInteger calls = new AtomicInteger();
@@ -173,9 +185,12 @@ public final class ObserverPropertyTest {
 
         olist.removeListener(l);
         olist.set(List.of(2));
-        assertEquals(1, calls.get()); // unchanged
+        assertEquals(1, calls.get());
     }
 
+    /**
+     * Verifies multiple list listeners are invoked even if one throws.
+     */
     @Test
     public void olist_multipleListeners_allAreCalled_evenIfOneThrows() {
         final AtomicInteger calls = new AtomicInteger();
@@ -187,7 +202,14 @@ public final class ObserverPropertyTest {
         assertEquals(2, calls.get());
     }
 
-    // ===== small sanity helper =====
+    /**
+     * Small helper that compares lists by content using {@link Objects#equals(Object, Object)}.
+     *
+     * @param a first list
+     * @param b second list
+     * @param <T> element type
+     * @return {@code true} if equal by content, otherwise {@code false}
+     */
     private static <T> boolean equalLists(List<T> a, List<T> b) {
         return Objects.equals(a, b);
     }

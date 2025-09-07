@@ -21,43 +21,34 @@ import java.awt.event.MouseEvent;
 import java.awt.event.WindowEvent;
 
 /**
- * MainFrame
- * ---------
- * Borderless main application window.
- * Wires the MVVM stack (DAO → ViewModel → API) and injects
- * the {@link TasksViewAPI} into the UI subtree.
- *
- * <p>This class contains no domain logic. It is responsible
- * only for initialization and window-level concerns.</p>
+ * Borderless main application window that initializes Look & Feel, wires the MVVM stack
+ * (DAO → ViewModel → API), and hosts the root UI including header and content area.
+ * <p>
+ * This class contains window-level concerns only; no domain logic is implemented here.
+ * </p>
  */
 public final class MainFrame extends JFrame {
 
-    /** Top header bar with app title and window controls. */
     private HeaderBar header;
-
-    /** UI-facing API, provided to ContentArea and its child panels. */
     private final TasksViewAPI api;
 
     /**
-     * Constructs the main frame, initializes L&F, wires DAO → ViewModel → API,
-     * and prepares the UI.
+     * Constructs the main frame, sets the look and feel, prepares DAO → ViewModel → API wiring,
+     * and builds the UI hierarchy.
      */
     public MainFrame() {
         super("Task Management App");
         try {
             UIManager.setLookAndFeel(new FlatMacDarkLaf());
         } catch (Throwable ignore) {
-            // Fallback to default L&F if FlatLaf is unavailable.
         }
 
-        // ---- App icon ----
         ImageIcon appIcon = (ImageIcon) UiUtils.loadRasterIcon(
                 "/taskmanagement/ui/resources/tasks_mng.png", 64, 64);
         if (appIcon != null) {
             setIconImage(appIcon.getImage());
         }
 
-        // ---- MVVM wiring (DAO -> ViewModel -> API) ----
         ITasksDAO dao = DAOProvider.get();
         TasksViewModel vm = new TasksViewModel(dao);
         this.api = new TasksViewApiAdapter(vm);
@@ -73,17 +64,11 @@ public final class MainFrame extends JFrame {
         setLocationRelativeTo(null);
     }
 
-    /**
-     * Builds the root container: header (north) + body (center).
-     *
-     * @return root component
-     */
     private JComponent buildRoot() {
         JPanel root = new JPanel(new BorderLayout());
         root.setOpaque(true);
         root.setBackground(AppTheme.APP_BG);
 
-        // ---- Header ----
         header = new HeaderBar();
         header.setTitleText("Task Management App");
         header.onAbout(btn -> AboutDialog.showDialog(this));
@@ -94,13 +79,11 @@ public final class MainFrame extends JFrame {
             }
         });
 
-        // Enable drag by header (fallback if native not available)
         installDragOn(header);
         try {
             var m = WindowChrome.class.getDeclaredMethod("installDragHandler", JFrame.class, JComponent.class);
             m.invoke(null, this, header);
         } catch (Throwable ignored) {
-            // Safe to ignore: fallback drag already installed
         }
 
         JPanel headerWrap = new JPanel(new BorderLayout());
@@ -110,7 +93,6 @@ public final class MainFrame extends JFrame {
         headerWrap.add(header, BorderLayout.CENTER);
         root.add(headerWrap, BorderLayout.NORTH);
 
-        // ---- Body ----
         JPanel bodyBackground = new JPanel(new BorderLayout());
         bodyBackground.setOpaque(true);
         bodyBackground.setBackground(AppTheme.BODY_BG);
@@ -118,9 +100,8 @@ public final class MainFrame extends JFrame {
                 AppTheme.PADDING, AppTheme.PADDING, AppTheme.PADDING, AppTheme.PADDING));
         root.add(bodyBackground, BorderLayout.CENTER);
 
-        // Pass API to ContentArea and children
         ContentArea content = new ContentArea();
-        content.setApi(api);  // ✅ Correct injection of API
+        content.setApi(api);
         api.reload();
         bodyBackground.add(content, BorderLayout.CENTER);
 
@@ -128,10 +109,6 @@ public final class MainFrame extends JFrame {
         return root;
     }
 
-    /**
-     * Installs a global ESC shortcut to close the window
-     * (equivalent to clicking the close button).
-     */
     private void installEscToClose() {
         JRootPane root = getRootPane();
         InputMap im = root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
@@ -149,11 +126,6 @@ public final class MainFrame extends JFrame {
         });
     }
 
-    /**
-     * Fallback drag handler: allows moving the window by dragging the header.
-     *
-     * @param handle the header component
-     */
     private void installDragOn(JComponent handle) {
         final Point[] origin = new Point[1];
         MouseAdapter ma = new MouseAdapter() {
@@ -172,9 +144,9 @@ public final class MainFrame extends JFrame {
     }
 
     /**
-     * Development-only launcher for this frame.
+     * Launches the application window.
      *
-     * @param args unused
+     * @param args ignored
      */
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {

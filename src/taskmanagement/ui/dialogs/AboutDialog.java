@@ -13,13 +13,19 @@ import java.awt.event.MouseEvent;
 import java.net.URI;
 
 /**
- * Modal "About" dialog for the application.
- * Presentation-only (MVVM-safe): no DAO/model access.
+ * Modal “About” dialog for the application.
+ * <p>
+ * Presentation-only (MVVM-safe): contains no DAO or model access.
  */
 public final class AboutDialog extends JDialog {
 
     private JButton okButton;
 
+    /**
+     * Creates a modal About dialog.
+     *
+     * @param owner the owner window; may be {@code null}
+     */
     public AboutDialog(Window owner) {
         super(owner, "About", ModalityType.APPLICATION_MODAL);
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
@@ -29,7 +35,6 @@ public final class AboutDialog extends JDialog {
         setLocationRelativeTo(owner);
         getRootPane().setDefaultButton(okButton);
 
-        // Close on ESC
         var im = getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
         var am = getRootPane().getActionMap();
         im.put(KeyStroke.getKeyStroke("ESCAPE"), "close");
@@ -38,16 +43,11 @@ public final class AboutDialog extends JDialog {
         });
     }
 
-    // ---------------------------------------------------------------------
-    // UI
-    // ---------------------------------------------------------------------
-
     private JComponent buildContent() {
         final RoundedPanel root = new RoundedPanel(AppTheme.PANEL_BG, AppTheme.TB_CORNER_RADIUS);
         root.setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
         root.setLayout(new BorderLayout(0, 12));
 
-        // ===== Header =====
         Icon infoIcon = UiUtils.loadRasterIcon(
                 "/taskmanagement/ui/resources/tasks_mng.png", 40, 40);
 
@@ -73,7 +73,6 @@ public final class AboutDialog extends JDialog {
         }
         header.add(titles, BorderLayout.CENTER);
 
-        // ===== Body =====
         JPanel body = new JPanel();
         body.setOpaque(false);
         body.setLayout(new BoxLayout(body, BoxLayout.Y_AXIS));
@@ -105,7 +104,6 @@ public final class AboutDialog extends JDialog {
         body.add(Box.createVerticalStrut(4));
         body.add(authorsList);
 
-        // ===== Actions =====
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         actions.setOpaque(false);
 
@@ -117,7 +115,6 @@ public final class AboutDialog extends JDialog {
 
         actions.add(okButton);
 
-        // Assemble
         root.add(header, BorderLayout.NORTH);
         root.add(body, BorderLayout.CENTER);
         root.add(actions, BorderLayout.SOUTH);
@@ -125,17 +122,11 @@ public final class AboutDialog extends JDialog {
         return root;
     }
 
-    /**
-     * Builds an ordered list:
-     *  1) Itay Vaznan – [icons panel]
-     *  2) Yuval Benzaquen
-     */
     private JPanel buildOrderedAuthors() {
         JPanel list = new JPanel();
         list.setOpaque(false);
         list.setLayout(new BoxLayout(list, BoxLayout.Y_AXIS));
 
-        // Row 1
         JPanel row1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
         row1.setOpaque(false);
         JLabel a1Label = new JLabel("1. Itay Vaznan  ");
@@ -145,7 +136,6 @@ public final class AboutDialog extends JDialog {
         row1.add(buildLinksPanel());
         row1.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        // Row 2
         JPanel row2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
         row2.setOpaque(false);
         JLabel a2Label = new JLabel("2. Yuval Benzaquen  ");
@@ -160,11 +150,6 @@ public final class AboutDialog extends JDialog {
         return list;
     }
 
-    /**
-     * Small icon row: LinkedIn | GitHub | Email
-     * Icons are loaded from /taskmanagement/ui/resources/*.png.
-     * Fallback to text if a resource is missing.
-     */
     private JPanel buildLinksPanel() {
         JPanel links = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         links.setOpaque(false);
@@ -187,9 +172,6 @@ public final class AboutDialog extends JDialog {
         return links;
     }
 
-    /**
-     * Creates a clickable icon label; falls back to underlined text when icon is null.
-     */
     private JComponent makeIconLink(Icon icon, String label, String url) {
         JLabel comp;
         if (icon != null) {
@@ -208,10 +190,6 @@ public final class AboutDialog extends JDialog {
         return comp;
     }
 
-    // ---------------------------------------------------------------------
-    // Helpers
-    // ---------------------------------------------------------------------
-
     private void openLink(String url) {
         try {
             if (!Desktop.isDesktopSupported()) {
@@ -223,39 +201,34 @@ public final class AboutDialog extends JDialog {
 
             if ("mailto".equalsIgnoreCase(scheme)) {
                 if (desktop.isSupported(Desktop.Action.MAIL)) {
-                    desktop.mail(uri); // open default mail client
+                    desktop.mail(uri);
                 } else {
                     throw new UnsupportedOperationException("MAIL action not supported");
                 }
             } else {
                 if (desktop.isSupported(Desktop.Action.BROWSE)) {
-                    desktop.browse(uri); // open default browser
+                    desktop.browse(uri);
                 } else {
                     throw new UnsupportedOperationException("BROWSE action not supported");
                 }
             }
         } catch (Exception ex) {
             try {
-                // Fallback: copy to clipboard and inform user
                 String value = url.startsWith("mailto:") ? url.substring("mailto:".length()) : url;
                 Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(value), null);
                 JOptionPane.showMessageDialog(this,
                         "Couldn't open the default app.\nCopied to clipboard: " + value,
                         "Open Link", JOptionPane.INFORMATION_MESSAGE);
             } catch (Exception ignore) {
-                // No further action
+                // intentionally ignored
             }
         }
     }
 
-    // ---------------------------------------------------------------------
-    // API
-    // ---------------------------------------------------------------------
-
     /**
-     * Show the modal About dialog.
+     * Shows the modal About dialog.
      *
-     * @param parent a component inside the parent window; may be null
+     * @param parent a component within the parent window; may be {@code null}
      */
     public static void showDialog(Component parent) {
         Window owner = parent instanceof Window ? (Window) parent : SwingUtilities.getWindowAncestor(parent);

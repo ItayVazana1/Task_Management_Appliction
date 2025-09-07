@@ -1,8 +1,17 @@
 package taskmanagement.application.viewmodel;
 
 /**
- * File export formats supported by the application.
+ * Enumeration of file export formats supported by the application.
  */
 public enum ExportFormat {
-    CSV, TXT
+
+    /**
+     * Comma-separated values format.
+     */
+    CSV,
+
+    /**
+     * Plain text format.
+     */
+    TXT
 }

@@ -3,20 +3,27 @@ package taskmanagement.persistence;
 import taskmanagement.persistence.derby.EmbeddedDerbyTasksDAO;
 
 /**
- * Central provider for the application's Data Access Object (DAO).
+ * Provides centralized access to the application's {@link ITasksDAO}.
  * <p>
- * Ensures a single {@link ITasksDAO} instance is used (Singleton pattern).
+ * This class ensures that only a single {@link ITasksDAO} instance is used
+ * throughout the application (Singleton pattern).
+ * </p>
  */
 public final class DAOProvider {
 
+    /**
+     * Private constructor to prevent instantiation of this utility class.
+     */
     private DAOProvider() {
-        // utility class, prevent instantiation
     }
 
     /**
-     * Returns the singleton DAO implementation.
+     * Returns the global singleton instance of the {@link ITasksDAO}.
+     * <p>
+     * The returned DAO is backed by an embedded Derby implementation.
+     * </p>
      *
-     * @return global {@link ITasksDAO} instance backed by Embedded Derby
+     * @return the singleton {@link ITasksDAO} instance
      */
     public static ITasksDAO get() {
         return EmbeddedDerbyTasksDAO.getInstance();

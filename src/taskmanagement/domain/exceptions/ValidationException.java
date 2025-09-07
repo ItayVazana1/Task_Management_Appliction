@@ -1,23 +1,29 @@
 package taskmanagement.domain.exceptions;
 
 /**
- * ValidationException
- * Unchecked domain exception for invalid input or illegal state transitions.
+ * Exception thrown to indicate validation errors in the domain layer.
+ * <p>
+ * Used for invalid input values or illegal state transitions within tasks.
+ * This exception is unchecked and extends {@link RuntimeException}.
+ * </p>
  */
 public class ValidationException extends RuntimeException {
 
     /**
-     * Creates a new ValidationException with the specified detail message.
-     * @param message detail message
+     * Constructs a new {@code ValidationException} with the specified detail message.
+     *
+     * @param message the detail message
      */
     public ValidationException(String message) {
         super(message);
     }
 
     /**
-     * Creates a new ValidationException with the specified detail message and cause.
-     * @param message detail message
-     * @param cause   the cause (may be null)
+     * Constructs a new {@code ValidationException} with the specified detail message
+     * and cause.
+     *
+     * @param message the detail message
+     * @param cause   the underlying cause (may be {@code null})
      */
     public ValidationException(String message, Throwable cause) {
         super(message, cause);

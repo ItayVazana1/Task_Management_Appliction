@@ -3,29 +3,40 @@ package taskmanagement.domain.visitor.export;
 import taskmanagement.domain.TaskState;
 
 /**
- * Export node variants (records) used for pattern-matching in export visitors.
- * This is a sealed interface that restricts the allowed record types.
+ * Sealed interface representing exportable task nodes for use in visitors.
+ * <p>
+ * Only the record variants {@link ToDoTaskRec}, {@link InProgressTaskRec},
+ * and {@link CompletedTaskRec} are permitted implementations.
+ * </p>
  */
 public sealed interface ExportNode
         permits ToDoTaskRec, InProgressTaskRec, CompletedTaskRec {
 
     /**
-     * @return unique identifier of the task
+     * Returns the unique identifier of the task.
+     *
+     * @return task id
      */
     int id();
 
     /**
-     * @return title of the task
+     * Returns the title of the task.
+     *
+     * @return task title (may be {@code null})
      */
     String title();
 
     /**
-     * @return description of the task
+     * Returns the description of the task.
+     *
+     * @return task description (may be {@code null})
      */
     String description();
 
     /**
-     * @return state of the task
+     * Returns the state of the task.
+     *
+     * @return task state (never {@code null})
      */
     TaskState state();
 }
