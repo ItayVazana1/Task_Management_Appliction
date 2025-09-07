@@ -10,6 +10,7 @@ import taskmanagement.application.viewmodel.sort.SortStrategy;
 
 import taskmanagement.domain.TaskState;
 import taskmanagement.domain.filter.ITaskFilter;
+import taskmanagement.domain.filter.Filters; // ← NEW: combinator filters (titleContains, byState, etc.)
 import taskmanagement.ui.api.TasksViewAPI;
 
 // ===== Export wiring =====
@@ -36,7 +37,7 @@ import java.util.stream.IntStream;
  *   <li>20% — Undo / Redo</li>
  *   <li>20% — Advance / Mark as…</li>
  *   <li>10% — Sort (combo + Apply / Reset)</li>
- *   <li>30% — Filter (checkboxes) + Apply / Reset / Show Filtered</li>
+ *   <li>30% — Filter (title + checkboxes) + Apply / Reset / Show Filtered</li>
  *   <li>5%  — Counters: Selected / Total</li>
  *   <li>15% — Export</li>
  * </ol>
@@ -70,7 +71,9 @@ public final class ToolBox extends RoundedPanel {
     private final JButton sortApplyBtn = new JButton("Apply");
     private final JButton sortResetBtn = new JButton("Reset");
 
-    // === Section 4: Filter (checkboxes) + Apply / Reset / Show Filtered ===
+    // === Section 4: Filter (title + checkboxes) + Apply / Reset / Show Filtered ===
+    private final JTextField titleField = new JTextField(); // ← NEW: title filter text field
+
     private final JCheckBox cbTodo       = new JCheckBox("To-Do");
     private final JCheckBox cbInProgress = new JCheckBox("In-Progress");
     private final JCheckBox cbCompleted  = new JCheckBox("Completed");
@@ -228,6 +231,25 @@ public final class ToolBox extends RoundedPanel {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.weightx = 1.0;
 
+        // --- Title contains (search row) ---
+        JPanel search = makeTransparent();
+        search.setLayout(new GridBagLayout());
+        JLabel titleLbl = new JLabel("Title contains");
+        titleLbl.setForeground(AppTheme.TB_TEXT_FG);
+        titleField.setPreferredSize(new Dimension(AppTheme.TB_FIELD_WIDTH, AppTheme.TB_FIELD_HEIGHT));
+
+        GridBagConstraints s = new GridBagConstraints();
+        s.insets = new Insets(AppTheme.TB_PAD, AppTheme.TB_PAD, AppTheme.TB_PAD / 2, AppTheme.TB_PAD);
+        s.gridx = 0; s.gridy = 0; s.anchor = GridBagConstraints.WEST;
+        search.add(titleLbl, s);
+        s.gridx = 1; s.gridy = 0; s.weightx = 1.0; s.fill = GridBagConstraints.HORIZONTAL;
+        search.add(titleField, s);
+
+        gbc.gridy = 0;
+        gbc.weighty = 0.15;
+        p.add(search, gbc);
+
+        // --- Checkboxes list ---
         JPanel list = makeTransparent();
         list.setLayout(new GridBagLayout());
 
@@ -242,11 +264,12 @@ public final class ToolBox extends RoundedPanel {
         r.gridy = 1; list.add(cbInProgress, r);
         r.gridy = 2; list.add(cbCompleted, r);
 
-        gbc.gridy = 0;
-        gbc.weighty = 0.7;
+        gbc.gridy = 1;
+        gbc.weighty = 0.55;
         gbc.fill = GridBagConstraints.HORIZONTAL;
         p.add(list, gbc);
 
+        // --- Buttons + toggle ---
         JPanel buttonsArea = makeTransparent();
         buttonsArea.setLayout(new GridBagLayout());
 
@@ -293,8 +316,8 @@ public final class ToolBox extends RoundedPanel {
         bb.weighty = 0.5;
         buttonsArea.add(bottomRow, bb);
 
-        gbc.gridy = 1;
-        gbc.weighty = 0.3;
+        gbc.gridy = 2;
+        gbc.weighty = 0.30;
         gbc.fill = GridBagConstraints.BOTH;
         p.add(buttonsArea, gbc);
 
@@ -462,7 +485,7 @@ public final class ToolBox extends RoundedPanel {
         });
     }
 
-    /** Connects Filter Apply/Reset/Toggle directly to the API based on the checkboxes state. */
+    /** Connects Filter Apply/Reset/Toggle directly to the API based on the title + checkboxes state. */
     public void bindFilterControls(TasksViewAPI api) {
         this.api = Objects.requireNonNull(api, "api");
 
@@ -486,22 +509,33 @@ public final class ToolBox extends RoundedPanel {
         updateTotalsFromApi();
     }
 
-    /** Builds an OR-composed filter from the selected state checkboxes. */
+    /** Builds a composed filter: (Title contains) AND (State in selected set [OR-logic]) */
     private ITaskFilter buildFilterFromUI() {
+        ITaskFilter f = Filters.all();
+
+        // Title contains (case-insensitive)
+        String q = titleField.getText();
+        if (q != null && !q.isBlank()) {
+            f = f.and(Filters.titleContains(q.trim()));
+        }
+
+        // States (OR over selected checkboxes)
         final EnumSet<TaskState> states = EnumSet.noneOf(TaskState.class);
         if (cbTodo.isSelected())       states.add(TaskState.ToDo);
         if (cbInProgress.isSelected()) states.add(TaskState.InProgress);
         if (cbCompleted.isSelected())  states.add(TaskState.Completed);
 
-        if (states.isEmpty()) {
-            // Pass-through (no filtering)
-            return t -> true;
+        if (!states.isEmpty()) {
+            ITaskFilter statesFilter = t -> t != null && t.getState() != null && states.contains(t.getState());
+            f = f.and(statesFilter);
         }
-        return t -> t != null && t.getState() != null && states.contains(t.getState());
+
+        return f;
     }
 
     /** Clears filter UI controls. */
     private void clearFilterUI() {
+        titleField.setText(""); // ← NEW: clear title search
         cbTodo.setSelected(false);
         cbInProgress.setSelected(false);
         cbCompleted.setSelected(false);
